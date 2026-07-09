@@ -3,6 +3,7 @@ import AtlasCanvas from './atlas/AtlasCanvas';
 import DetailPanel from './panels/DetailPanel';
 import FieldPanel from './panels/FieldPanel';
 import LibraryPanel from './panels/LibraryPanel';
+import TopicTreemap from './panels/TopicTreemap';
 import Breadcrumb from './Breadcrumb';
 import SearchBox from './SearchBox';
 import { fetchBasemap, fetchLibrary, syncLibrary } from './api';
@@ -123,14 +124,41 @@ export default function App() {
           onClose={() => setStack((s) => s.slice(0, -1))}
         />
       )}
-      {(focus?.kind === 'subfield' || focus?.kind === 'topic') && (
-        <DetailPanel
-          basemap={basemap}
-          focus={focus}
-          onNavigate={navigate}
-          onClose={() => setStack((s) => s.slice(0, -1))}
-        />
-      )}
+      {(focus?.kind === 'subfield' || focus?.kind === 'topic') &&
+        (() => {
+          const subfieldId =
+            focus.kind === 'subfield'
+              ? focus.id
+              : (basemap.topics.find((t) => t.id === focus.id)?.subfield ?? null);
+          const subfieldName = basemap.subfields.find((s) => s.id === subfieldId)?.name;
+          return (
+            <>
+              {subfieldId && (
+                <section className="stage">
+                  <div className="stage-head">
+                    <span className="stage-title">{subfieldName}</span>
+                    <span className="stage-sub">
+                      topics — tile size = papers, orange = your coverage
+                    </span>
+                  </div>
+                  <TopicTreemap
+                    basemap={basemap}
+                    subfieldId={subfieldId}
+                    overlay={library?.overlay ?? null}
+                    activeTopicId={focus.kind === 'topic' ? focus.id : null}
+                    onNavigate={navigate}
+                  />
+                </section>
+              )}
+              <DetailPanel
+                basemap={basemap}
+                focus={focus}
+                onNavigate={navigate}
+                onClose={() => setStack((s) => s.slice(0, -1))}
+              />
+            </>
+          );
+        })()}
 
       <footer className="credits">
         data: <a href="https://openalex.org">OpenAlex</a> · click a field to dive in · scroll to

@@ -80,6 +80,7 @@ export interface Overlay {
   stats: { total: number; matched: number; placed: number };
   itemsBySubfield: Record<string, LibraryEntry[]>;
   coverage: Record<string, number>;
+  coverageByTopic: Record<string, number>;
   frontier: FrontierGap[];
 }
 export interface LibraryState {

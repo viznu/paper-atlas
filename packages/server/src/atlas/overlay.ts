@@ -25,6 +25,8 @@ export interface Overlay {
   itemsBySubfield: Record<string, LibraryEntry[]>;
   /** subfieldId -> count, for territory brightness. */
   coverage: Record<string, number>;
+  /** topicId -> count, for the topic treemap heat. */
+  coverageByTopic: Record<string, number>;
   /**
    * Frontier territories: subfields that your covered areas cite heavily but that you have
    * little/no coverage in — ranked candidates for "where to explore next".
@@ -51,6 +53,7 @@ export function computeOverlay(matched: MatchedItem[], basemap: Basemap): Overla
 
   const itemsBySubfield: Record<string, LibraryEntry[]> = {};
   const coverage: Record<string, number> = {};
+  const coverageByTopic: Record<string, number> = {};
   let placed = 0;
   const matchedCount = matched.filter((m) => m.work).length;
 
@@ -66,6 +69,8 @@ export function computeOverlay(matched: MatchedItem[], basemap: Basemap): Overla
     };
     (itemsBySubfield[sid] ??= []).push(entry);
     coverage[sid] = (coverage[sid] ?? 0) + 1;
+    const tid = m.work?.topic?.id;
+    if (tid) coverageByTopic[tid] = (coverageByTopic[tid] ?? 0) + 1;
     placed++;
   }
 
@@ -108,6 +113,7 @@ export function computeOverlay(matched: MatchedItem[], basemap: Basemap): Overla
     stats: { total: matched.length, matched: matchedCount, placed },
     itemsBySubfield,
     coverage,
+    coverageByTopic,
     frontier,
   };
 }

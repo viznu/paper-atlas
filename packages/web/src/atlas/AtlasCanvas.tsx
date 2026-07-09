@@ -374,24 +374,9 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
           halo(label, sx, sy, hoverRef.current === i ? 15 : 13, 1, cov > 0 ? 700 : 600);
           placed.push({ x: sx, y: sy, w: ctx.measureText(label).width + 8, h: 20 });
         }
-      } else if (focusSubfield) {
-        // subfield: readable topic text map (biggest topics first, collision-avoided)
-        const topics = [...(geo.topicsBySubfield.get(focusSubfield.id) ?? [])].sort(
-          (a, b) => b.worksCount - a.worksCount,
-        );
-        halo(focusSubfield.name, ...toScreen(focusSubfield.x, focusSubfield.y), 18, 0.25, 800);
-        for (const t of topics) {
-          const [sx, sy] = toScreen(t.x, t.y);
-          if (sx < -160 || sx > width + 160 || sy < -20 || sy > height + 20) continue;
-          const size = Math.max(10, Math.min(17, 9 + Math.sqrt(t.worksCount) / 45));
-          ctx.font = `600 ${size}px system-ui, sans-serif`;
-          const w = ctx.measureText(t.name).width;
-          const isSel = f?.kind === 'topic' && f.id === t.id;
-          if (!isSel && overlaps(sx, sy, w, size)) continue;
-          halo(t.name, sx, sy, size, isSel ? 1 : 0.92, isSel ? 800 : 600);
-          placed.push({ x: sx, y: sy, w: w + 10, h: size + 8 });
-        }
       }
+      // Subfield/topic focus renders its topics as the readable treemap overlay (TopicTreemap),
+      // so the canvas stays a clean context view — no tangled on-map topic labels.
     };
 
     const loop = (now: number) => {
