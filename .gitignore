@@ -11,8 +11,8 @@ scripts/.cache/
 .env
 .env.*
 
-# server bundles a copy of the basemap at build time
-packages/server/public/basemap.json
+# server bundles the built web UI + basemap into public/ at build time
+packages/server/public/
 
 # internal notes never ship in this public repo
 notes/
