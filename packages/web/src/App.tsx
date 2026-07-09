@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AtlasCanvas, { type FlyTarget } from './atlas/AtlasCanvas';
 import DetailPanel from './panels/DetailPanel';
+import LibraryPanel from './panels/LibraryPanel';
 import SearchBox from './SearchBox';
-import { fetchBasemap } from './api';
-import type { Basemap, Selection } from './types';
+import { fetchBasemap, fetchLibrary, syncLibrary } from './api';
+import type { Basemap, LibraryState, Selection } from './types';
 
 export default function App() {
   const [basemap, setBasemap] = useState<Basemap | null>(null);
@@ -11,6 +12,8 @@ export default function App() {
   const [selection, setSelection] = useState<Selection>(null);
   const [hoverName, setHoverName] = useState<string | null>(null);
   const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
+  const [library, setLibrary] = useState<LibraryState | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const flyNonce = useRef(0);
 
   useEffect(() => {
@@ -18,6 +21,24 @@ export default function App() {
       .then(setBasemap)
       .catch((e) => setLoadError(String(e)));
   }, []);
+
+  const runSync = useCallback(() => {
+    setSyncing(true);
+    syncLibrary()
+      .then(setLibrary)
+      .catch(() => {})
+      .finally(() => setSyncing(false));
+  }, []);
+
+  // Load library state; if a library is configured but not yet projected, sync it once.
+  useEffect(() => {
+    fetchLibrary()
+      .then((state) => {
+        setLibrary(state);
+        if (state.configured && !state.overlay && !state.syncing) runSync();
+      })
+      .catch(() => {});
+  }, [runSync]);
 
   const select = useCallback(
     (sel: Selection, fly = false) => {
@@ -65,6 +86,7 @@ export default function App() {
       <AtlasCanvas
         basemap={basemap}
         selection={selection}
+        overlay={library?.overlay ?? null}
         onSelect={select}
         hoverInfo={setHoverName}
         flyTarget={flyTarget}
@@ -77,6 +99,15 @@ export default function App() {
         <SearchBox basemap={basemap} onSelect={select} />
       </header>
       {hoverName && !selection && <div className="hover-hint">{hoverName}</div>}
+      {!selection && (
+        <LibraryPanel
+          basemap={basemap}
+          library={library}
+          syncing={syncing}
+          onSync={runSync}
+          onSelect={select}
+        />
+      )}
       <DetailPanel
         basemap={basemap}
         selection={selection}

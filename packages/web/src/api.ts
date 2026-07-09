@@ -1,4 +1,16 @@
-import type { Basemap, WorkSummary } from './types';
+import type { Basemap, LibraryState, WorkSummary } from './types';
+
+export async function fetchLibrary(): Promise<LibraryState> {
+  const res = await fetch('/api/library');
+  if (!res.ok) throw new Error(`library: ${res.status}`);
+  return res.json();
+}
+
+export async function syncLibrary(): Promise<LibraryState> {
+  const res = await fetch('/api/library/sync', { method: 'POST' });
+  if (!res.ok) throw new Error(`sync: ${res.status}`);
+  return res.json();
+}
 
 export async function fetchBasemap(): Promise<Basemap> {
   const res = await fetch('/api/basemap');

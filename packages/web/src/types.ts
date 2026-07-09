@@ -54,3 +54,31 @@ export type Selection =
   | { kind: 'subfield'; id: string }
   | { kind: 'topic'; id: string }
   | null;
+
+export interface LibraryEntry {
+  key: string;
+  title: string;
+  year: number | null;
+  subfield: string | null;
+  confidence: number;
+}
+export interface FrontierGap {
+  id: string;
+  name: string;
+  field: string;
+  score: number;
+  coverage: number;
+  viaSubfields: string[];
+}
+export interface Overlay {
+  stats: { total: number; matched: number; placed: number };
+  itemsBySubfield: Record<string, LibraryEntry[]>;
+  coverage: Record<string, number>;
+  frontier: FrontierGap[];
+}
+export interface LibraryState {
+  configured: boolean;
+  overlay: Overlay | null;
+  error: string | null;
+  syncing: boolean;
+}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Delaunay } from 'd3-delaunay';
-import type { Basemap, BasemapSubfield, Selection } from '../types';
+import type { Basemap, BasemapSubfield, Overlay, Selection } from '../types';
 import {
   buildFieldHues,
   labelColor,
@@ -31,12 +31,20 @@ export interface FlyTarget {
 interface Props {
   basemap: Basemap;
   selection: Selection;
+  overlay: Overlay | null;
   hoverInfo: (text: string | null) => void;
   onSelect: (sel: Selection) => void;
   flyTarget: FlyTarget | null;
 }
 
-export default function AtlasCanvas({ basemap, selection, onSelect, hoverInfo, flyTarget }: Props) {
+export default function AtlasCanvas({
+  basemap,
+  selection,
+  overlay,
+  onSelect,
+  hoverInfo,
+  flyTarget,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View>({ x: 0, y: 0, k: 1 });
   const hoverRef = useRef<number | null>(null); // subfield index
@@ -44,6 +52,8 @@ export default function AtlasCanvas({ basemap, selection, onSelect, hoverInfo, f
   const animRef = useRef<{ from: View; to: View; start: number } | null>(null);
   const selectionRef = useRef<Selection>(selection);
   selectionRef.current = selection;
+  const overlayRef = useRef<Overlay | null>(overlay);
+  overlayRef.current = overlay;
 
   const geo = useMemo(() => {
     const subfields = basemap.subfields;
@@ -169,6 +179,59 @@ export default function AtlasCanvas({ basemap, selection, onSelect, hoverInfo, f
         }
       }
 
+      // library overlay: coverage glow, frontier-gap rings, and library-item dots
+      const ov = overlayRef.current;
+      if (ov) {
+        const frontierRank = new Map(ov.frontier.map((f, i) => [f.id, i]));
+        for (let i = 0; i < basemap.subfields.length; i++) {
+          const cell = geo.cells[i];
+          if (!cell) continue;
+          const s = basemap.subfields[i]!;
+          const count = ov.coverage[s.id] ?? 0;
+          const rank = frontierRank.get(s.id);
+
+          // Frontier gap: amber dashed ring on the top uncovered territories you cite into.
+          if (count === 0 && rank != null && rank < 10) {
+            ctx.beginPath();
+            ctx.moveTo(cell[0]![0], cell[0]![1]);
+            for (const [px, py] of cell.slice(1)) ctx.lineTo(px, py);
+            ctx.closePath();
+            ctx.strokeStyle = '#f5b642';
+            ctx.globalAlpha = 0.9 - rank * 0.06;
+            ctx.lineWidth = 2 / k;
+            ctx.setLineDash([6 / k, 4 / k]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+          }
+
+          // Covered territory: warm glow proportional to how much you've read there.
+          if (count > 0) {
+            ctx.beginPath();
+            ctx.moveTo(cell[0]![0], cell[0]![1]);
+            for (const [px, py] of cell.slice(1)) ctx.lineTo(px, py);
+            ctx.closePath();
+            ctx.fillStyle = '#e8eefc';
+            ctx.globalAlpha = Math.min(0.22, 0.05 + Math.log2(count + 1) * 0.03);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            // library-item dots on a deterministic spiral around the centroid
+            const dots = Math.min(count, 40);
+            const spread = 10 + Math.sqrt(count) * 2.5;
+            for (let d = 0; d < dots; d++) {
+              const r = spread * Math.sqrt((d + 0.5) / dots);
+              const a = d * 2.399963229728653;
+              ctx.beginPath();
+              ctx.arc(s.x + r * Math.cos(a), s.y + r * Math.sin(a), Math.max(0.7, 2.4 / Math.sqrt(k)), 0, 2 * Math.PI);
+              ctx.fillStyle = '#ffffff';
+              ctx.globalAlpha = 0.92;
+              ctx.fill();
+              ctx.globalAlpha = 1;
+            }
+          }
+        }
+      }
+
       // neighbor flow arcs from the selected subfield
       if (selSubfield) {
         for (const n of selSubfield.neighbors.slice(0, 6)) {
@@ -280,10 +343,10 @@ export default function AtlasCanvas({ basemap, selection, onSelect, hoverInfo, f
     };
   }, [basemap, geo]);
 
-  // redraw on selection change
+  // redraw on selection / overlay change
   useEffect(() => {
     dirtyRef.current = true;
-  }, [selection]);
+  }, [selection, overlay]);
 
   // fly-to
   useEffect(() => {
