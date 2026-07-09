@@ -32,8 +32,14 @@ export async function openalexGet(path: string): Promise<unknown> {
   }
 }
 
+export { openalexGet as openalexRaw };
+
 const WORK_FIELDS =
   'id,doi,display_name,publication_year,cited_by_count,primary_topic,authorships,primary_location,open_access';
+
+/** Fields needed to place an item on the atlas and seed the citation graph. */
+export const ENRICH_FIELDS =
+  'id,doi,display_name,publication_year,cited_by_count,primary_topic,topics,authorships,primary_location,open_access,referenced_works';
 
 export interface WorkSummary {
   id: string;

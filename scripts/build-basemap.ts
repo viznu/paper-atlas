@@ -37,6 +37,11 @@ function argValue(name: string): string | undefined {
 }
 const SUBFIELD_LIMIT = Number(argValue('subfields') ?? 0) || Infinity; // dev: cap subfields
 const WORKS_PER_SUBFIELD = Number(argValue('works-per-subfield') ?? 25);
+// Only resolve a referenced work if some subfield's sample cites it at least this many times.
+// Singletons dominate the 742k-long tail but each contributes negligible citation flow, so
+// this both denoises the flow matrix and cuts resolution API cost by roughly 5-8x.
+const MIN_REF_COUNT = Number(argValue('min-ref-count') ?? 3);
+const DRY_RUN = process.argv.includes('--dry-run'); // stop before any resolution API calls
 const OUT_PATH = argValue('out') ?? join(ROOT, 'packages', 'basemap-data', 'data', 'basemap.json');
 
 // ---------- polite fetch with cache, retry, throttle ----------
@@ -140,9 +145,22 @@ for (const sf of subfieldsRaw) {
 }
 
 // ---------- 3. resolve referenced works -> primary subfield ----------
+let totalUnique = 0;
 const allRefIds = new Set<string>();
-for (const counts of refCounts.values()) for (const id of counts.keys()) allRefIds.add(id);
-console.log(`Resolving ${allRefIds.size} unique referenced works to subfields…`);
+for (const counts of refCounts.values()) {
+  for (const [id, n] of counts) {
+    totalUnique++;
+    if (n >= MIN_REF_COUNT) allRefIds.add(id);
+  }
+}
+console.log(
+  `Referenced works: ${totalUnique} (subfield,ref) pairs; ${allRefIds.size} unique to resolve ` +
+    `at min-ref-count=${MIN_REF_COUNT} (~${Math.ceil(allRefIds.size / 50)} API calls).`,
+);
+if (DRY_RUN) {
+  console.log('Dry run: stopping before resolution.');
+  process.exit(0);
+}
 
 const RESOLVE_CACHE = join(CACHE_DIR, 'work-subfield-resolutions.json');
 const resolved: Record<string, string | null> = existsSync(RESOLVE_CACHE)
