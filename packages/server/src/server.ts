@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { basemapRaw } from './basemap.js';
 import { worksFor, RateLimitError } from './openalex.js';
+import { libraryState, syncLibrary } from './library.js';
 
 /** Wraps a live OpenAlex fetch so a daily-budget exhaustion degrades to a 200 with a flag. */
 async function withRateLimit<T>(reply: { code: (n: number) => unknown }, fn: () => Promise<T>) {
@@ -22,6 +23,13 @@ export async function buildServer(opts: { dev?: boolean } = {}) {
   const app = Fastify({ logger: opts.dev ? { level: 'info' } : { level: 'warn' } });
 
   app.get('/api/health', async () => ({ ok: true }));
+
+  // Library overlay: coverage + frontier gaps. Non-blocking — returns current state; a POST
+  // to /api/library/sync (re)builds it. Cache-first, so a synced library needs no API calls.
+  app.get('/api/library', async () => libraryState());
+  app.post<{ Querystring: { refresh?: string } }>('/api/library/sync', async (req) =>
+    syncLibrary({ refresh: req.query.refresh === '1' }),
+  );
 
   app.get('/api/basemap', async (_req, reply) => {
     reply.header('content-type', 'application/json').header('cache-control', 'max-age=3600');
