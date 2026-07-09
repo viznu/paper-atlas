@@ -55,6 +55,12 @@ export type Selection =
   | { kind: 'topic'; id: string }
   | null;
 
+/** A level in the drill-down: a field (facet), a subfield (territory), or a topic. */
+export type Focus =
+  | { kind: 'field'; id: string }
+  | { kind: 'subfield'; id: string }
+  | { kind: 'topic'; id: string };
+
 export interface LibraryEntry {
   key: string;
   title: string;

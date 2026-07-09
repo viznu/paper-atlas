@@ -1,18 +1,19 @@
-import type { Basemap, LibraryState, Selection } from '../types';
+import type { Basemap, Focus, LibraryState } from '../types';
 
 interface Props {
   basemap: Basemap;
   library: LibraryState | null;
   syncing: boolean;
   onSync: () => void;
-  onSelect: (sel: Selection, fly?: boolean) => void;
+  onNavigate: (focus: Focus) => void;
 }
 
 /**
  * The library overlay panel: sync status, coverage summary, and the ranked frontier gaps —
  * "where to explore next" — each jumping to that territory on the map.
  */
-export default function LibraryPanel({ basemap, library, syncing, onSync, onSelect }: Props) {
+export default function LibraryPanel({ basemap, library, syncing, onSync, onNavigate }: Props) {
+  void basemap;
   if (!library) return null;
 
   if (!library.configured) {
@@ -53,7 +54,7 @@ export default function LibraryPanel({ basemap, library, syncing, onSync, onSele
               .slice(0, 8)
               .map((f) => (
                 <li key={f.id}>
-                  <button onClick={() => onSelect({ kind: 'subfield', id: f.id }, true)}>
+                  <button onClick={() => onNavigate({ kind: 'subfield', id: f.id })}>
                     <span className="frontier-name">{f.name}</span>
                     <span className="muted small">
                       {f.field} · via {f.viaSubfields.slice(0, 2).join(', ')}

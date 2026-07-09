@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchWorks } from '../api';
-import type { Basemap, Selection, WorkSummary } from '../types';
+import type { Basemap, Focus, WorkSummary } from '../types';
 
 function PaperList({ kind, id }: { kind: 'subfield' | 'topic'; id: string }) {
   const [mode, setMode] = useState<'top' | 'recent'>('top');
@@ -64,16 +64,16 @@ function PaperList({ kind, id }: { kind: 'subfield' | 'topic'; id: string }) {
 
 interface Props {
   basemap: Basemap;
-  selection: Selection;
-  onSelect: (sel: Selection, fly?: boolean) => void;
+  focus: Focus | null;
+  onNavigate: (focus: Focus) => void;
   onClose: () => void;
 }
 
-export default function DetailPanel({ basemap, selection, onSelect, onClose }: Props) {
-  if (!selection) return null;
+export default function DetailPanel({ basemap, focus, onNavigate, onClose }: Props) {
+  if (!focus || focus.kind === 'field') return null;
 
-  if (selection.kind === 'subfield') {
-    const sf = basemap.subfields.find((s) => s.id === selection.id);
+  if (focus.kind === 'subfield') {
+    const sf = basemap.subfields.find((s) => s.id === focus.id);
     if (!sf) return null;
     const field = basemap.fields.find((f) => f.id === sf.field);
     const topics = basemap.topics
@@ -84,7 +84,9 @@ export default function DetailPanel({ basemap, selection, onSelect, onClose }: P
         <button className="close" onClick={onClose}>
           ×
         </button>
-        <div className="crumb">{field?.name}</div>
+        <button className="crumb linklike" onClick={() => field && onNavigate({ kind: 'field', id: field.id })}>
+          ‹ {field?.name}
+        </button>
         <h2>{sf.name}</h2>
         <p className="muted">
           {sf.worksCount.toLocaleString()} works in OpenAlex
@@ -110,7 +112,7 @@ export default function DetailPanel({ basemap, selection, onSelect, onClose }: P
                 <button
                   key={n.id}
                   className="chip"
-                  onClick={() => onSelect({ kind: 'subfield', id: n.id }, true)}
+                  onClick={() => onNavigate({ kind: 'subfield', id: n.id })}
                 >
                   {nb.name}
                 </button>
@@ -120,11 +122,11 @@ export default function DetailPanel({ basemap, selection, onSelect, onClose }: P
         </div>
         <h3>Topics ({topics.length})</h3>
         <div className="chips">
-          {topics.slice(0, 14).map((t) => (
+          {topics.slice(0, 16).map((t) => (
             <button
               key={t.id}
               className="chip subtle"
-              onClick={() => onSelect({ kind: 'topic', id: t.id }, true)}
+              onClick={() => onNavigate({ kind: 'topic', id: t.id })}
             >
               {t.name}
             </button>
@@ -136,7 +138,7 @@ export default function DetailPanel({ basemap, selection, onSelect, onClose }: P
     );
   }
 
-  const topic = basemap.topics.find((t) => t.id === selection.id);
+  const topic = basemap.topics.find((t) => t.id === focus.id);
   if (!topic) return null;
   const sf = basemap.subfields.find((s) => s.id === topic.subfield);
   return (
@@ -144,14 +146,12 @@ export default function DetailPanel({ basemap, selection, onSelect, onClose }: P
       <button className="close" onClick={onClose}>
         ×
       </button>
-      <div className="crumb">
-        <button
-          className="linklike"
-          onClick={() => sf && onSelect({ kind: 'subfield', id: sf.id }, true)}
-        >
-          {sf?.name}
-        </button>
-      </div>
+      <button
+        className="crumb linklike"
+        onClick={() => sf && onNavigate({ kind: 'subfield', id: sf.id })}
+      >
+        ‹ {sf?.name}
+      </button>
       <h2>{topic.name}</h2>
       <p className="muted">
         {topic.worksCount.toLocaleString()} works
@@ -166,13 +166,16 @@ export default function DetailPanel({ basemap, selection, onSelect, onClose }: P
       </p>
       {topic.summary && <p className="summary">{topic.summary}…</p>}
       {topic.keywords.length > 0 && (
-        <div className="chips">
-          {topic.keywords.map((kw) => (
-            <span key={kw} className="chip subtle static">
-              {kw}
-            </span>
-          ))}
-        </div>
+        <>
+          <h3>Keywords</h3>
+          <div className="chips">
+            {topic.keywords.map((kw) => (
+              <span key={kw} className="tag">
+                {kw}
+              </span>
+            ))}
+          </div>
+        </>
       )}
       <h3>Papers</h3>
       <PaperList kind="topic" id={topic.id} />

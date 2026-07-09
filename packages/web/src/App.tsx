@@ -1,20 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import AtlasCanvas, { type FlyTarget } from './atlas/AtlasCanvas';
+import { useCallback, useEffect, useState } from 'react';
+import AtlasCanvas from './atlas/AtlasCanvas';
 import DetailPanel from './panels/DetailPanel';
+import FieldPanel from './panels/FieldPanel';
 import LibraryPanel from './panels/LibraryPanel';
+import Breadcrumb from './Breadcrumb';
 import SearchBox from './SearchBox';
 import { fetchBasemap, fetchLibrary, syncLibrary } from './api';
-import type { Basemap, LibraryState, Selection } from './types';
+import { stackFor } from './nav';
+import type { Basemap, Focus, LibraryState } from './types';
 
 export default function App() {
   const [basemap, setBasemap] = useState<Basemap | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selection, setSelection] = useState<Selection>(null);
+  const [stack, setStack] = useState<Focus[]>([]);
   const [hoverName, setHoverName] = useState<string | null>(null);
-  const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
   const [library, setLibrary] = useState<LibraryState | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const flyNonce = useRef(0);
+
+  const focus = stack.length ? stack[stack.length - 1]! : null;
 
   useEffect(() => {
     fetchBasemap()
@@ -30,7 +33,6 @@ export default function App() {
       .finally(() => setSyncing(false));
   }, []);
 
-  // Load library state; if a library is configured but not yet projected, sync it once.
   useEffect(() => {
     fetchLibrary()
       .then((state) => {
@@ -40,26 +42,27 @@ export default function App() {
       .catch(() => {});
   }, [runSync]);
 
-  const select = useCallback(
-    (sel: Selection, fly = false) => {
-      setSelection(sel);
-      if (!fly || !sel || !basemap) return;
-      const target =
-        sel.kind === 'subfield'
-          ? basemap.subfields.find((s) => s.id === sel.id)
-          : basemap.topics.find((t) => t.id === sel.id);
-      if (target) {
-        flyNonce.current += 1;
-        setFlyTarget({
-          x: target.x,
-          y: target.y,
-          k: sel.kind === 'subfield' ? 4 : 8,
-          nonce: flyNonce.current,
-        });
-      }
+  // Navigate to a focus, building the full breadcrumb stack for it.
+  const navigate = useCallback(
+    (f: Focus) => {
+      if (!basemap) return;
+      setStack(stackFor(f, basemap));
     },
     [basemap],
   );
+  // Jump to a breadcrumb index; -1 clears back to the world map.
+  const goTo = useCallback((index: number) => {
+    setStack((s) => (index < 0 ? [] : s.slice(0, index + 1)));
+  }, []);
+
+  // Escape / backspace go up one level.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && stack.length) setStack((s) => s.slice(0, -1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [stack.length]);
 
   if (loadError) {
     return (
@@ -85,38 +88,53 @@ export default function App() {
     <div className="app">
       <AtlasCanvas
         basemap={basemap}
-        selection={selection}
+        focus={focus}
         overlay={library?.overlay ?? null}
-        onSelect={select}
+        onNavigate={navigate}
         hoverInfo={setHoverName}
-        flyTarget={flyTarget}
       />
       <header className="topbar">
         <div className="brand">
           <span className="brand-name">paper-atlas</span>
           <span className="brand-sub">a map of science, from citation flows</span>
         </div>
-        <SearchBox basemap={basemap} onSelect={select} />
+        <SearchBox basemap={basemap} onNavigate={navigate} />
       </header>
-      {hoverName && !selection && <div className="hover-hint">{hoverName}</div>}
-      {!selection && (
+
+      <Breadcrumb basemap={basemap} stack={stack} onGoTo={goTo} />
+
+      {hoverName && !focus && <div className="hover-hint">{hoverName}</div>}
+
+      {!focus && (
         <LibraryPanel
           basemap={basemap}
           library={library}
           syncing={syncing}
           onSync={runSync}
-          onSelect={select}
+          onNavigate={navigate}
         />
       )}
-      <DetailPanel
-        basemap={basemap}
-        selection={selection}
-        onSelect={select}
-        onClose={() => setSelection(null)}
-      />
+      {focus?.kind === 'field' && (
+        <FieldPanel
+          basemap={basemap}
+          fieldId={focus.id}
+          overlay={library?.overlay ?? null}
+          onNavigate={navigate}
+          onClose={() => setStack((s) => s.slice(0, -1))}
+        />
+      )}
+      {(focus?.kind === 'subfield' || focus?.kind === 'topic') && (
+        <DetailPanel
+          basemap={basemap}
+          focus={focus}
+          onNavigate={navigate}
+          onClose={() => setStack((s) => s.slice(0, -1))}
+        />
+      )}
+
       <footer className="credits">
-        data: <a href="https://openalex.org">OpenAlex</a> · territories = subfields, neighbors by
-        citation flow · scroll to zoom
+        data: <a href="https://openalex.org">OpenAlex</a> · click a field to dive in · scroll to
+        zoom · esc to go up
       </footer>
     </div>
   );

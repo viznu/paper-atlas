@@ -1,26 +1,30 @@
 import { useMemo, useState } from 'react';
-import type { Basemap, Selection } from './types';
+import type { Basemap, Focus } from './types';
 
 interface Props {
   basemap: Basemap;
-  onSelect: (sel: Selection, fly?: boolean) => void;
+  onNavigate: (focus: Focus) => void;
 }
 
-export default function SearchBox({ basemap, onSelect }: Props) {
+export default function SearchBox({ basemap, onNavigate }: Props) {
   const [q, setQ] = useState('');
 
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (needle.length < 2) return [];
-    const out: { kind: 'subfield' | 'topic'; id: string; name: string; extra: string }[] = [];
+    const out: { kind: 'field' | 'subfield' | 'topic'; id: string; name: string; extra: string }[] =
+      [];
+    for (const f of basemap.fields) {
+      if (f.name.toLowerCase().includes(needle))
+        out.push({ kind: 'field', id: f.id, name: f.name, extra: 'facet' });
+    }
     for (const s of basemap.subfields) {
-      if (s.name.toLowerCase().includes(needle)) {
+      if (out.length > 6) break;
+      if (s.name.toLowerCase().includes(needle))
         out.push({ kind: 'subfield', id: s.id, name: s.name, extra: 'subfield' });
-      }
-      if (out.length > 5) break;
     }
     for (const t of basemap.topics) {
-      if (out.length >= 12) break;
+      if (out.length >= 14) break;
       if (
         t.name.toLowerCase().includes(needle) ||
         t.keywords.some((k) => k.toLowerCase().includes(needle))
@@ -44,7 +48,7 @@ export default function SearchBox({ basemap, onSelect }: Props) {
             <li key={r.id}>
               <button
                 onClick={() => {
-                  onSelect({ kind: r.kind, id: r.id }, true);
+                  onNavigate({ kind: r.kind, id: r.id });
                   setQ('');
                 }}
               >

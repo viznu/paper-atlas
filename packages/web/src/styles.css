@@ -251,6 +251,124 @@ body,
   color: #7dd3fc;
 }
 
+.breadcrumb {
+  position: absolute;
+  top: 60px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  background: rgba(10, 16, 28, 0.9);
+  border: 1px solid #24304a;
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  max-width: calc(100% - 400px);
+  overflow-x: auto;
+  z-index: 5;
+}
+.crumb-back {
+  background: #131c30;
+  border: 1px solid #2c3a58;
+  color: #e2e8f0;
+  border-radius: 6px;
+  width: 26px;
+  height: 24px;
+  cursor: pointer;
+  margin-right: 6px;
+  flex: none;
+}
+.crumb-back:hover {
+  border-color: #3b82f6;
+}
+.crumb-wrap {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.crumb-sep {
+  color: #475569;
+  margin: 0 2px;
+}
+.crumb-seg {
+  background: none;
+  border: none;
+  color: #7dd3fc;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.crumb-seg:hover {
+  background: #131c30;
+}
+.crumb-seg.current {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+.crumb-kind {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.subfield-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+}
+.subfield-list li button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 8px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.subfield-list li button:hover {
+  background: #131c30;
+}
+.sf-name {
+  flex: 1;
+  z-index: 1;
+}
+.sf-count {
+  z-index: 1;
+  font-size: 11px;
+  color: #cbd5e1;
+  background: #1e293b;
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.sf-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: #e8eefc;
+  opacity: 0.5;
+  border-radius: 2px;
+}
+
+.tag {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: #131c30;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
 .lib-panel {
   position: absolute;
   top: 72px;
