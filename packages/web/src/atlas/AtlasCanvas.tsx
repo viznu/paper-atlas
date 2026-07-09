@@ -23,7 +23,7 @@ interface Props {
   basemap: Basemap;
   focus: Focus | null; // null = world level
   overlay: Overlay | null;
-  hoverInfo: (text: string | null) => void;
+  hoverInfo: (subfieldId: string | null) => void;
   onNavigate: (focus: Focus) => void;
 }
 
@@ -69,12 +69,28 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
     hexes.forEach((hx, i) => hexesBySub.set(hx.sub, [...(hexesBySub.get(hx.sub) ?? []), i]));
 
     const fieldColors = buildFieldColors(basemap);
-    const colorOf = (s: BasemapSubfield) => fieldColors.get(s.field) ?? '#6b7f99';
     const subfieldIndex = new Map(subfields.map((s, i) => [s.id, i]));
     const membersByField = new Map<string, number[]>();
     subfields.forEach((s, i) => {
       membersByField.set(s.field, [...(membersByField.get(s.field) ?? []), i]);
     });
+    // Each subfield gets a distinct SHADE of its field's colour, so a field reads as one family
+    // while its subfields stay individually distinguishable (Medicine → many reds, etc.).
+    const subfieldColor = new Array<string>(subfields.length);
+    for (const [fieldId, memberIdxs] of membersByField) {
+      const fc = fieldColors.get(fieldId) ?? '#6b7f99';
+      const N = memberIdxs.length;
+      // sort members by works so the shade ramp is stable, not layout-order-dependent
+      const ordered = [...memberIdxs].sort(
+        (a, b) => (subfields[b]!.worksCount || 0) - (subfields[a]!.worksCount || 0),
+      );
+      ordered.forEach((idx, j) => {
+        const off = N > 1 ? -22 + (44 * j) / (N - 1) : 0; // lightness ramp within the family
+        subfieldColor[idx] = shade(fc, off);
+      });
+    }
+    const colorOf = (s: BasemapSubfield) => fieldColors.get(s.field) ?? '#6b7f99';
+    const colorOfIdx = (i: number) => subfieldColor[i] ?? '#6b7f99';
     const fieldAnchors = basemap.fields
       .map((f) => {
         const members = (membersByField.get(f.id) ?? []).map((i) => subfields[i]!);
@@ -101,6 +117,7 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       hexCorners,
       hexesBySub,
       colorOf,
+      colorOfIdx,
       subfieldIndex,
       membersByField,
       fieldAnchors,
@@ -229,7 +246,7 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       // hex tiles — one honeycomb cell per grid point, coloured by its subfield's field
       for (const hex of geo.hexes) {
         const s = basemap.subfields[hex.sub]!;
-        const base = geo.colorOf(s);
+        const base = geo.colorOfIdx(hex.sub);
         const isFocus = focusIdx === hex.sub;
         const isNeighbor = neighborIds.has(s.id);
         const isHover = hoverRef.current === hex.sub;
@@ -472,7 +489,7 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       if (idx !== hoverRef.current) {
         hoverRef.current = idx;
         dirtyRef.current = true;
-        hoverInfo(idx != null ? basemap.subfields[idx]!.name : null);
+        hoverInfo(idx != null ? basemap.subfields[idx]!.id : null);
       }
       // field-label hover cursor at world level
       const [sx, sy] = screenXY(e);

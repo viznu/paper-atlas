@@ -25,3 +25,65 @@ export function focusLabel(focus: Focus, basemap: Basemap): string {
     return basemap.subfields.find((s) => s.id === focus.id)?.name ?? focus.id;
   return basemap.topics.find((t) => t.id === focus.id)?.name ?? focus.id;
 }
+
+export interface LocalGap {
+  id: string;
+  name: string;
+  field: string;
+  weight: number;
+  via: string[];
+}
+
+const fieldNameOf = (basemap: Basemap, subfieldId: string) => {
+  const s = basemap.subfields.find((x) => x.id === subfieldId);
+  return s ? (basemap.fields.find((f) => f.id === s.field)?.name ?? '') : '';
+};
+
+/** "Explore next" from a subfield: its citation-flow neighbours you have not read into. */
+export function subfieldGaps(
+  subfieldId: string,
+  basemap: Basemap,
+  coverage: Record<string, number>,
+): LocalGap[] {
+  const sf = basemap.subfields.find((s) => s.id === subfieldId);
+  if (!sf) return [];
+  return sf.neighbors
+    .filter((n) => (coverage[n.id] ?? 0) === 0)
+    .map((n) => {
+      const nb = basemap.subfields.find((s) => s.id === n.id);
+      return nb
+        ? { id: n.id, name: nb.name, field: fieldNameOf(basemap, n.id), weight: n.w, via: [sf.name] }
+        : null;
+    })
+    .filter((g): g is LocalGap => !!g)
+    .slice(0, 6);
+}
+
+/** "Explore next" from a field: uncovered subfields its members cite into, ranked by flow. */
+export function fieldGaps(
+  fieldId: string,
+  basemap: Basemap,
+  coverage: Record<string, number>,
+): LocalGap[] {
+  const members = basemap.subfields.filter((s) => s.field === fieldId);
+  const score = new Map<string, number>();
+  const via = new Map<string, Set<string>>();
+  for (const m of members) {
+    for (const n of m.neighbors) {
+      if ((coverage[n.id] ?? 0) > 0) continue; // only gaps
+      if (n.id === m.id) continue;
+      score.set(n.id, (score.get(n.id) ?? 0) + n.w);
+      (via.get(n.id) ?? via.set(n.id, new Set()).get(n.id)!).add(m.name);
+    }
+  }
+  return [...score.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([id, weight]) => {
+      const nb = basemap.subfields.find((s) => s.id === id);
+      return nb
+        ? { id, name: nb.name, field: fieldNameOf(basemap, id), weight, via: [...(via.get(id) ?? [])].slice(0, 2) }
+        : null;
+    })
+    .filter((g): g is LocalGap => !!g);
+}

@@ -1,4 +1,6 @@
 import type { Basemap, Focus, Overlay } from '../types';
+import { fieldGaps } from '../nav';
+import GapList from './GapList';
 
 interface Props {
   basemap: Basemap;
@@ -45,6 +47,13 @@ export default function FieldPanel({ basemap, fieldId, overlay, onNavigate, onCl
           </li>
         ))}
       </ul>
+      {overlay && (
+        <GapList
+          gaps={fieldGaps(fieldId, basemap, overlay.coverage)}
+          onNavigate={onNavigate}
+          blurb={`Areas ${field.name} cites into that you haven't explored.`}
+        />
+      )}
     </aside>
   );
 }

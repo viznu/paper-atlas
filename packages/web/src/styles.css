@@ -93,6 +93,46 @@ body,
   background: #1a2439;
 }
 
+.hovercard {
+  position: absolute;
+  top: 72px;
+  right: 16px;
+  width: 268px;
+  padding: 16px 18px;
+  background: rgba(10, 16, 28, 0.92);
+  border: 1px solid #24304a;
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+.hc-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 2px 0 12px;
+  color: #e2e8f0;
+}
+.hc-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.hc-stats > div {
+  display: flex;
+  flex-direction: column;
+}
+.hc-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1.1;
+}
+.hc-lab {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
 .hover-hint {
   position: absolute;
   bottom: 48px;
@@ -447,6 +487,50 @@ body,
   font-size: 12px;
 }
 
+.panel h3.explore {
+  color: #f5b642;
+}
+.mine-details {
+  margin: 14px -8px 4px;
+  border: 1px solid #24304a;
+  border-radius: 10px;
+  background: rgba(19, 28, 48, 0.4);
+  padding: 0 8px;
+}
+.mine-details summary {
+  cursor: pointer;
+  padding: 9px 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #cbd5e1;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mine-details summary::-webkit-details-marker {
+  display: none;
+}
+.mine-details summary::before {
+  content: '▸';
+  color: #7dd3fc;
+  transition: transform 0.15s;
+}
+.mine-details[open] summary::before {
+  transform: rotate(90deg);
+}
+.mine-badge {
+  background: #f5b642;
+  color: #1a1206;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+.mine-details .mine-list {
+  padding-bottom: 8px;
+}
 .panel h3.mine {
   color: #f5b642;
 }

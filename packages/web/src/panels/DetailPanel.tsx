@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 import { fetchWorks } from '../api';
+import { subfieldGaps } from '../nav';
+import GapList from './GapList';
 import type { Basemap, Focus, LibraryEntry, Overlay, WorkSummary } from '../types';
 
-/** The user's own papers placed in this subfield/topic — shown even when OpenAlex is rate-limited. */
+/**
+ * The user's own papers placed here — a collapsible dropdown (kept out of the way, since the
+ * field/topic structure is the star), still available even when OpenAlex is rate-limited.
+ */
 function LibraryHere({ items }: { items: LibraryEntry[] }) {
   if (!items.length) return null;
   return (
-    <>
-      <h3 className="mine">In your library here ({items.length})</h3>
+    <details className="mine-details">
+      <summary>
+        In your library here <span className="mine-badge">{items.length}</span>
+      </summary>
       <div className="mine-list">
         {items.map((it) => {
           const href = it.zoteroKey
@@ -26,7 +33,7 @@ function LibraryHere({ items }: { items: LibraryEntry[] }) {
           );
         })}
       </div>
-    </>
+    </details>
   );
 }
 
@@ -120,6 +127,7 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
         <h2>{sf.name}</h2>
         <p className="muted">
           {sf.worksCount.toLocaleString()} works in OpenAlex
+          {mine.length > 0 && ` · ${mine.length} in your library`}
           {sf.wikipedia && (
             <>
               {' · '}
@@ -129,12 +137,14 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
             </>
           )}
         </p>
-        <LibraryHere items={mine} />
+        {overlay && (
+          <GapList
+            gaps={subfieldGaps(sf.id, basemap, overlay.coverage)}
+            onNavigate={onNavigate}
+            blurb="Neighbouring subfields this one cites that you haven't explored."
+          />
+        )}
         <h3>Cites into / cited by</h3>
-        <p className="muted small">
-          Nearest neighbors by citation flow — the subfields this one exchanges the most citations
-          with.
-        </p>
         <div className="chips">
           {sf.neighbors.slice(0, 8).map((n) => {
             const nb = basemap.subfields.find((s) => s.id === n.id);
@@ -163,6 +173,7 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
             </button>
           ))}
         </div>
+        <LibraryHere items={mine} />
         <h3>Papers</h3>
         <PaperList kind="subfield" id={sf.id} />
       </aside>
@@ -187,6 +198,7 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
       <h2>{topic.name}</h2>
       <p className="muted">
         {topic.worksCount.toLocaleString()} works
+        {mine.length > 0 && ` · ${mine.length} in your library`}
         {topic.wikipedia && (
           <>
             {' · '}
@@ -197,7 +209,6 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
         )}
       </p>
       {topic.summary && <p className="summary">{topic.summary}…</p>}
-      <LibraryHere items={mine} />
       {topic.keywords.length > 0 && (
         <>
           <h3>Keywords</h3>
@@ -210,6 +221,7 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
           </div>
         </>
       )}
+      <LibraryHere items={mine} />
       <h3>All papers in this topic</h3>
       <PaperList kind="topic" id={topic.id} />
     </aside>

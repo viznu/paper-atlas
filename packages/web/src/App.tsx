@@ -4,6 +4,7 @@ import DetailPanel from './panels/DetailPanel';
 import FieldPanel from './panels/FieldPanel';
 import LibraryPanel from './panels/LibraryPanel';
 import TopicTreemap from './panels/TopicTreemap';
+import HoverCard from './panels/HoverCard';
 import Breadcrumb from './Breadcrumb';
 import SearchBox from './SearchBox';
 import { fetchBasemap, fetchLibrary, syncLibrary } from './api';
@@ -14,7 +15,7 @@ export default function App() {
   const [basemap, setBasemap] = useState<Basemap | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [stack, setStack] = useState<Focus[]>([]);
-  const [hoverName, setHoverName] = useState<string | null>(null);
+  const [hoverSub, setHoverSub] = useState<string | null>(null);
   const [library, setLibrary] = useState<LibraryState | null>(null);
   const [syncing, setSyncing] = useState(false);
 
@@ -92,7 +93,7 @@ export default function App() {
         focus={focus}
         overlay={library?.overlay ?? null}
         onNavigate={navigate}
-        hoverInfo={setHoverName}
+        hoverInfo={setHoverSub}
       />
       <header className="topbar">
         <div className="brand">
@@ -104,7 +105,10 @@ export default function App() {
 
       <Breadcrumb basemap={basemap} stack={stack} onGoTo={goTo} />
 
-      {hoverName && !focus && <div className="hover-hint">{hoverName}</div>}
+      {/* Hover stats on the right (only when no detail panel occupies that space). */}
+      {hoverSub && (!focus || focus.kind === 'field') && (
+        <HoverCard basemap={basemap} overlay={library?.overlay ?? null} subfieldId={hoverSub} />
+      )}
 
       {!focus && (
         <LibraryPanel
