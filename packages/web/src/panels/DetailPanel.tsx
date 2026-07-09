@@ -6,13 +6,19 @@ function PaperList({ kind, id }: { kind: 'subfield' | 'topic'; id: string }) {
   const [mode, setMode] = useState<'top' | 'recent'>('top');
   const [works, setWorks] = useState<WorkSummary[] | null>(null);
   const [error, setError] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
 
   useEffect(() => {
     let live = true;
     setWorks(null);
     setError(false);
+    setRateLimited(false);
     fetchWorks(kind, id, mode)
-      .then((w) => live && setWorks(w))
+      .then((r) => {
+        if (!live) return;
+        setRateLimited(r.rateLimited);
+        setWorks(r.works);
+      })
       .catch(() => live && setError(true));
     return () => {
       live = false;
@@ -29,6 +35,12 @@ function PaperList({ kind, id }: { kind: 'subfield' | 'topic'; id: string }) {
         ))}
       </div>
       {error && <p className="muted">Could not load papers (OpenAlex unreachable).</p>}
+      {rateLimited && (
+        <p className="muted">
+          OpenAlex daily limit reached — papers will load again after the midnight-UTC reset.
+          Cached views still work.
+        </p>
+      )}
       {!works && !error && <p className="muted">Loading papers…</p>}
       {works?.map((w) => (
         <a

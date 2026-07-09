@@ -4,7 +4,19 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { basemapRaw } from './basemap.js';
-import { worksFor } from './openalex.js';
+import { worksFor, RateLimitError } from './openalex.js';
+
+/** Wraps a live OpenAlex fetch so a daily-budget exhaustion degrades to a 200 with a flag. */
+async function withRateLimit<T>(reply: { code: (n: number) => unknown }, fn: () => Promise<T>) {
+  try {
+    return { works: await fn(), rateLimited: false };
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      return { works: [], rateLimited: true, retryAfterSeconds: err.retryAfterSeconds };
+    }
+    throw err;
+  }
+}
 
 export async function buildServer(opts: { dev?: boolean } = {}) {
   const app = Fastify({ logger: opts.dev ? { level: 'info' } : { level: 'warn' } });
@@ -18,17 +30,19 @@ export async function buildServer(opts: { dev?: boolean } = {}) {
 
   app.get<{ Params: { id: string }; Querystring: { mode?: string } }>(
     '/api/subfields/:id/works',
-    async (req) => {
+    async (req, reply) => {
       const mode = req.query.mode === 'recent' ? 'recent' : 'top';
-      return worksFor({ kind: 'subfield', id: `subfields/${req.params.id}` }, mode);
+      return withRateLimit(reply, () =>
+        worksFor({ kind: 'subfield', id: `subfields/${req.params.id}` }, mode),
+      );
     },
   );
 
   app.get<{ Params: { id: string }; Querystring: { mode?: string } }>(
     '/api/topics/:id/works',
-    async (req) => {
+    async (req, reply) => {
       const mode = req.query.mode === 'recent' ? 'recent' : 'top';
-      return worksFor({ kind: 'topic', id: req.params.id }, mode);
+      return withRateLimit(reply, () => worksFor({ kind: 'topic', id: req.params.id }, mode));
     },
   );
 

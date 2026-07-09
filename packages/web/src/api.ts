@@ -6,11 +6,17 @@ export async function fetchBasemap(): Promise<Basemap> {
   return res.json();
 }
 
+export interface WorksResponse {
+  works: WorkSummary[];
+  rateLimited: boolean;
+  retryAfterSeconds?: number | null;
+}
+
 export async function fetchWorks(
   kind: 'subfield' | 'topic',
   id: string,
   mode: 'top' | 'recent',
-): Promise<WorkSummary[]> {
+): Promise<WorksResponse> {
   const path =
     kind === 'subfield'
       ? `/api/subfields/${id.replace('subfields/', '')}/works?mode=${mode}`

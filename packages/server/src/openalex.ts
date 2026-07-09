@@ -1,19 +1,46 @@
 /**
- * Minimal OpenAlex client used by the explorer API: throttled, retried, and cached in memory.
- * OpenAlex is free and keyless; setting OPENALEX_MAILTO joins their faster "polite pool".
+ * Minimal OpenAlex client used by the explorer API: throttled, retried, and cached to disk so
+ * repeat views cost no budget. OpenAlex is keyless; setting OPENALEX_MAILTO joins their faster
+ * "polite pool". OpenAlex enforces a daily spend budget: when it is exhausted, requests are
+ * refused with a 429 whose body carries a `retryAfter`. That case throws RateLimitError so the
+ * server can degrade gracefully rather than surface a 500.
  */
+import { ApiCache, RateLimitError } from './enrich/apiCache.js';
+
 const API = 'https://api.openalex.org';
 const MAILTO = process.env.OPENALEX_MAILTO;
 
-const cache = new Map<string, { at: number; data: unknown }>();
-const TTL_MS = 1000 * 60 * 60 * 12;
+const mem = new Map<string, unknown>();
+let disk: ApiCache | null = null;
+function diskCache(): ApiCache {
+  if (!disk) disk = new ApiCache();
+  return disk;
+}
 
 let lastRequestAt = 0;
-const MIN_SPACING_MS = 110;
+const MIN_SPACING_MS = 150;
+
+/** A budget refusal carries a JSON body with retryAfter + a remaining-budget field. */
+function isBudgetRefusal(body: unknown): { retryAfter: number | null } | null {
+  if (body && typeof body === 'object') {
+    const b = body as Record<string, unknown>;
+    if (
+      typeof b.error === 'string' &&
+      (/budget|rate limit|insufficient/i.test(b.error) || 'dailyRemainingUsd' in b)
+    ) {
+      return { retryAfter: typeof b.retryAfter === 'number' ? b.retryAfter : null };
+    }
+  }
+  return null;
+}
 
 export async function openalexGet(path: string): Promise<unknown> {
-  const hit = cache.get(path);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.data;
+  if (mem.has(path)) return mem.get(path);
+  const cached = diskCache().get(path);
+  if (cached !== undefined) {
+    mem.set(path, cached);
+    return cached;
+  }
 
   const url = `${API}${path}${MAILTO ? `${path.includes('?') ? '&' : '?'}mailto=${MAILTO}` : ''}`;
   for (let attempt = 0; ; attempt++) {
@@ -21,16 +48,25 @@ export async function openalexGet(path: string): Promise<unknown> {
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     lastRequestAt = Date.now();
     const res = await fetch(url);
-    if ((res.status === 429 || res.status >= 500) && attempt < 4) {
-      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-      continue;
+    if (!res.ok) {
+      // Parse the body to tell a transient 429 (retry) from a budget refusal (give up cleanly).
+      const body = await res.json().catch(() => null);
+      const refusal = isBudgetRefusal(body);
+      if (refusal) throw new RateLimitError(refusal.retryAfter);
+      if ((res.status === 429 || res.status >= 500) && attempt < 4) {
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        continue;
+      }
+      throw new Error(`OpenAlex ${res.status} for ${path}`);
     }
-    if (!res.ok) throw new Error(`OpenAlex ${res.status} for ${path}`);
     const data = await res.json();
-    cache.set(path, { at: Date.now(), data });
+    mem.set(path, data);
+    diskCache().set(path, data);
     return data;
   }
 }
+
+export { RateLimitError } from './enrich/apiCache.js';
 
 export { openalexGet as openalexRaw };
 
