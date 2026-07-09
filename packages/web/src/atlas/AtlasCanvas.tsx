@@ -14,8 +14,6 @@ import {
 
 /** World-space bounds of the basemap layout (see scripts/build-basemap.ts). */
 const WORLD = { min: -40, max: 1070 };
-const WATER_GRID_STEP = 26;
-const WATER_MIN_DIST = 40;
 
 interface View {
   x: number; // world coord at canvas left
@@ -53,31 +51,41 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
   const geo = useMemo(() => {
     const subfields = basemap.subfields;
     const seeds: [number, number][] = subfields.map((s) => [s.x, s.y]);
-    const seedDelaunay = Delaunay.from(seeds);
-    const water: [number, number][] = [];
-    let probe = 0;
-    for (let gx = WORLD.min; gx <= WORLD.max; gx += WATER_GRID_STEP) {
-      for (let gy = WORLD.min; gy <= WORLD.max; gy += WATER_GRID_STEP) {
-        probe = seedDelaunay.find(gx, gy, probe);
-        const s = subfields[probe]!;
-        if (Math.hypot(s.x - gx, s.y - gy) > WATER_MIN_DIST) water.push([gx, gy]);
-      }
-    }
-    const all = [...seeds, ...water];
-    const delaunay = Delaunay.from(all);
+    // Contiguous continents: one voronoi cell per subfield, filling the plane so cells share
+    // borders (no ocean gaps). The organic outline comes from the coastline, not the cells.
+    const delaunay = Delaunay.from(seeds);
     const voronoi = delaunay.voronoi([WORLD.min, WORLD.min, WORLD.max, WORLD.max]);
     const cells: ([number, number][] | null)[] = subfields.map(
       (_, i) => (voronoi.cellPolygon(i) as [number, number][] | null) ?? null,
     );
-    // Smoothed (soft-continent) outlines + a rough radius for gradient sizing.
-    const smoothCells = cells.map((c) => (c ? chaikin(c.slice(0, -1), 2) : null));
+    // Coastline = expanded, smoothed convex hull of the subfields → the landmass outline.
+    const hull = convexHull(seeds);
+    const cx = seeds.reduce((a, p) => a + p[0], 0) / seeds.length;
+    const cy = seeds.reduce((a, p) => a + p[1], 0) / seeds.length;
+    const expand = (pts: [number, number][], margin: number): [number, number][] =>
+      pts.map(([px, py]) => {
+        const dx = px - cx;
+        const dy = py - cy;
+        const d = Math.hypot(dx, dy) || 1;
+        return [px + (dx / d) * margin, py + (dy / d) * margin] as [number, number];
+      });
+    const coastline = chaikin(expand(hull, 58), 3);
+    // Faint interior "contour" rings for topographic texture (coast scaled toward the centroid).
+    const contour = (t: number) =>
+      chaikin(
+        expand(hull, 58).map(([px, py]) => [cx + (px - cx) * t, cy + (py - cy) * t] as [number, number]),
+        3,
+      );
+    const contours = [contour(0.82), contour(0.6), contour(0.4)];
+    // Gradient radius per cell, capped so edge cells that reach far don't over-bloom.
     const cellRadius = subfields.map((s, i) => {
       const c = cells[i];
-      if (!c) return 40;
+      if (!c) return 60;
       let m = 0;
       for (const [px, py] of c) m = Math.max(m, Math.hypot(px - s.x, py - s.y));
-      return Math.max(20, m);
+      return Math.max(28, Math.min(150, m));
     });
+    const centroid: [number, number] = [cx, cy];
     const fieldColors = buildFieldColors(basemap);
     const colorOf = (s: BasemapSubfield) =>
       fieldColors.get(s.field) ?? { h: 210, s: 60, l: 46 };
@@ -109,7 +117,9 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       seeds,
       delaunay,
       cells,
-      smoothCells,
+      coastline,
+      contours,
+      centroid,
       cellRadius,
       colorOf,
       subfieldIndex,
@@ -182,14 +192,20 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       dirtyRef.current = true;
     };
     const viewForBounds = (b: Bounds): View => {
-      const { width, height } = canvas.getBoundingClientRect();
+      const rect = canvas.getBoundingClientRect();
+      // Guard against a not-yet-laid-out canvas (0×0) which would make k=0 and hide everything.
+      const width = rect.width || 800;
+      const height = rect.height || 600;
       const k = Math.min(width / (b.maxX - b.minX), height / (b.maxY - b.minY)) * 0.92;
       return { k, x: (b.minX + b.maxX) / 2 - width / k / 2, y: (b.minY + b.maxY) / 2 - height / k / 2 };
     };
     resize();
     viewRef.current = viewForBounds(boundsForFocus(focusRef.current));
     const ro = new ResizeObserver(() => {
+      const hadValidView = isFinite(viewRef.current.k) && viewRef.current.k > 0.001;
       resize();
+      // If the view was never sized (mounted before layout), fit it once real dimensions exist.
+      if (!hadValidView) viewRef.current = viewForBounds(boundsForFocus(focusRef.current));
       dirtyRef.current = true;
     });
     ro.observe(canvas);
@@ -218,9 +234,19 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       const inFocusField = (s: BasemapSubfield) =>
         fieldFocus ? s.field === fieldFocus : true;
 
-      // territories: soft, smoothly-bordered continents with a gently-lit radial fill
+      // ocean floor beneath the landmass (so the coast reads against the space background)
+      traceSmooth(ctx, geo.coastline);
+      ctx.fillStyle = 'rgba(9, 15, 28, 0.92)';
+      ctx.fill();
+
+      // Everything inside the coastline is clipped to it, so the continent has an organic edge
+      // while its internal territories are crisp, border-sharing regions.
+      ctx.save();
+      traceSmooth(ctx, geo.coastline);
+      ctx.clip();
+
       for (let i = 0; i < basemap.subfields.length; i++) {
-        const cell = geo.smoothCells[i];
+        const cell = geo.cells[i];
         if (!cell) continue;
         const s = basemap.subfields[i]!;
         const color = geo.colorOf(s);
@@ -245,11 +271,20 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
         } else {
           ctx.fill();
         }
+        // internal border (like country lines)
         ctx.strokeStyle = isFocus || isNeighbor ? territoryGlow(color) : territoryStroke(color, dim);
-        ctx.lineWidth = (isFocus ? 1.8 : isNeighbor ? 1.2 : 0.7) / k;
-        ctx.globalAlpha = isFocus ? 0.95 : isNeighbor ? 0.6 : 1;
+        ctx.lineWidth = (isFocus ? 1.8 : isNeighbor ? 1.1 : 0.6) / k;
+        ctx.globalAlpha = isFocus ? 0.95 : isNeighbor ? 0.6 : 0.7;
         ctx.stroke();
         ctx.globalAlpha = 1;
+      }
+
+      // faint topographic contour rings for texture
+      for (const c of geo.contours) {
+        traceSmooth(ctx, c);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
+        ctx.lineWidth = 1 / k;
+        ctx.stroke();
       }
 
       // library overlay: coverage heat, frontier rings, library dots
@@ -258,7 +293,7 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
         const maxCov = Math.max(1, ...Object.values(ov.coverage));
         const frontierRank = new Map(ov.frontier.map((g, i) => [g.id, i]));
         for (let i = 0; i < basemap.subfields.length; i++) {
-          const cell = geo.smoothCells[i];
+          const cell = geo.cells[i];
           if (!cell) continue;
           const s = basemap.subfields[i]!;
           if (fieldFocus && !inFocusField(s)) continue;
@@ -276,8 +311,6 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
           }
           if (count > 0) {
             const rr = geo.cellRadius[i]!;
-            // warm heat bloom — a radial gradient centred on the territory, filling its own
-            // smoothed path (no clip, so no risk of leaking clip state into later draws)
             traceSmooth(ctx, cell);
             ctx.fillStyle = heatGradient(ctx, s.x, s.y, rr, count / maxCov);
             ctx.fill();
@@ -296,6 +329,18 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
           }
         }
       }
+
+      ctx.restore(); // end coastline clip
+
+      // glowing coastline on top
+      ctx.save();
+      traceSmooth(ctx, geo.coastline);
+      ctx.shadowColor = 'rgba(120, 175, 255, 0.55)';
+      ctx.shadowBlur = 16 * k;
+      ctx.strokeStyle = 'rgba(150, 200, 255, 0.5)';
+      ctx.lineWidth = 2.4 / k;
+      ctx.stroke();
+      ctx.restore();
 
       // neighbor flow arcs from the focused subfield
       if (focusSubfield) {
@@ -445,12 +490,10 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
     };
 
     const subfieldAt = (wx: number, wy: number): number | null => {
+      // Only land counts: ignore clicks in the ocean outside the coastline.
+      if (!pointInPoly(wx, wy, geo.coastline)) return null;
       const i = geo.delaunay.find(wx, wy);
-      if (i < basemap.subfields.length) {
-        const s = basemap.subfields[i]!;
-        if (Math.hypot(s.x - wx, s.y - wy) < WATER_MIN_DIST * 2.5) return i;
-      }
-      return null;
+      return i < basemap.subfields.length ? i : null;
     };
     const topicAt = (wx: number, wy: number): string | null => {
       const v = viewRef.current;
@@ -560,6 +603,41 @@ function traceSmooth(ctx: CanvasRenderingContext2D, cell: [number, number][]) {
   ctx.moveTo(cell[0]![0], cell[0]![1]);
   for (const [px, py] of cell.slice(1)) ctx.lineTo(px, py);
   ctx.closePath();
+}
+
+/** Convex hull via Andrew's monotone chain (counter-clockwise, no repeated endpoint). */
+function convexHull(pts: [number, number][]): [number, number][] {
+  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (p.length < 3) return p;
+  const cross = (o: number[], a: number[], b: number[]) =>
+    (a[0]! - o[0]!) * (b[1]! - o[1]!) - (a[1]! - o[1]!) * (b[0]! - o[0]!);
+  const lower: [number, number][] = [];
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, q) <= 0)
+      lower.pop();
+    lower.push(q);
+  }
+  const upper: [number, number][] = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i]!;
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, q) <= 0)
+      upper.pop();
+    upper.push(q);
+  }
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
+}
+
+/** Ray-cast point-in-polygon (used to tell land clicks from ocean clicks). */
+function pointInPoly(x: number, y: number, poly: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i]!;
+    const [xj, yj] = poly[j]!;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
 }
 function union(a: Bounds, b: Bounds): Bounds {
   return {
