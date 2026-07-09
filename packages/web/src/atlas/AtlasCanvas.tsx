@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Delaunay } from 'd3-delaunay';
 import type { Basemap, BasemapSubfield, BasemapTopic, Focus, Overlay } from '../types';
 import {
-  buildFieldHues,
+  buildFieldColors,
   chaikin,
   heatGradient,
   labelColor,
@@ -78,8 +78,9 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       for (const [px, py] of c) m = Math.max(m, Math.hypot(px - s.x, py - s.y));
       return Math.max(20, m);
     });
-    const fieldHues = buildFieldHues(basemap);
-    const hueOf = (s: BasemapSubfield) => fieldHues.get(s.field) ?? 200;
+    const fieldColors = buildFieldColors(basemap);
+    const colorOf = (s: BasemapSubfield) =>
+      fieldColors.get(s.field) ?? { h: 210, s: 60, l: 46 };
     const subfieldIndex = new Map(subfields.map((s, i) => [s.id, i]));
     const membersByField = new Map<string, number[]>();
     subfields.forEach((s, i) => {
@@ -110,7 +111,7 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       cells,
       smoothCells,
       cellRadius,
-      hueOf,
+      colorOf,
       subfieldIndex,
       membersByField,
       fieldAnchors,
@@ -222,7 +223,7 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
         const cell = geo.smoothCells[i];
         if (!cell) continue;
         const s = basemap.subfields[i]!;
-        const hue = geo.hueOf(s);
+        const color = geo.colorOf(s);
         const isHover = hoverRef.current === i;
         const isFocus = focusIdx === i;
         const isNeighbor = neighborIds.has(s.id);
@@ -230,21 +231,21 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
           (fieldFocus != null && !inFocusField(s)) ||
           (focusSubfield != null && !isFocus && !isNeighbor && !isHover);
         traceSmooth(ctx, cell);
-        ctx.fillStyle = territoryGradient(ctx, s.x, s.y, geo.cellRadius[i]!, hue, {
+        ctx.fillStyle = territoryGradient(ctx, s.x, s.y, geo.cellRadius[i]!, color, {
           hover: isHover,
           focus: isFocus,
           dim,
         });
         if (isFocus || isNeighbor) {
           ctx.save();
-          ctx.shadowColor = territoryGlow(hue);
+          ctx.shadowColor = territoryGlow(color);
           ctx.shadowBlur = (isFocus ? 26 : 14) * k;
           ctx.fill();
           ctx.restore();
         } else {
           ctx.fill();
         }
-        ctx.strokeStyle = isFocus || isNeighbor ? territoryGlow(hue) : territoryStroke(hue, dim);
+        ctx.strokeStyle = isFocus || isNeighbor ? territoryGlow(color) : territoryStroke(color, dim);
         ctx.lineWidth = (isFocus ? 1.8 : isNeighbor ? 1.2 : 0.7) / k;
         ctx.globalAlpha = isFocus ? 0.95 : isNeighbor ? 0.6 : 1;
         ctx.stroke();
@@ -275,13 +276,11 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
           }
           if (count > 0) {
             const rr = geo.cellRadius[i]!;
-            // warm heat bloom clipped to the territory
-            ctx.save();
+            // warm heat bloom — a radial gradient centred on the territory, filling its own
+            // smoothed path (no clip, so no risk of leaking clip state into later draws)
             traceSmooth(ctx, cell);
-            ctx.clip();
             ctx.fillStyle = heatGradient(ctx, s.x, s.y, rr, count / maxCov);
-            ctx.fillRect(s.x - rr, s.y - rr, rr * 2, rr * 2);
-            ctx.restore();
+            ctx.fill();
             const dots = Math.min(count, 40);
             const spread = 9 + Math.sqrt(count) * 2.3;
             for (let d = 0; d < dots; d++) {
@@ -310,7 +309,7 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
           ctx.beginPath();
           ctx.moveTo(focusSubfield.x, focusSubfield.y);
           ctx.quadraticCurveTo(midX, midY, t.x, t.y);
-          ctx.strokeStyle = territoryGlow(geo.hueOf(focusSubfield));
+          ctx.strokeStyle = territoryGlow(geo.colorOf(focusSubfield));
           ctx.globalAlpha = 0.5;
           ctx.lineWidth = Math.max(0.6, 6 * n.w) / k;
           ctx.stroke();
@@ -319,7 +318,12 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       }
 
       // ---------- labels (screen space) ----------
+      // Defensively clear any canvas state (shadow/alpha) left by the fill passes so text
+      // renders crisply.
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+      ctx.globalAlpha = 1;
       const toScreen = (wx: number, wy: number): [number, number] => [(wx - view.x) * k, (wy - view.y) * k];
       const placed: { x: number; y: number; w: number; h: number }[] = [];
       const overlaps = (x: number, y: number, w: number, h: number) =>

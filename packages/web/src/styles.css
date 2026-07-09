@@ -157,6 +157,10 @@ body,
 .small {
   font-size: 11px;
 }
+.dim {
+  color: #64748b;
+  font-style: italic;
+}
 .muted a,
 .panel a {
   color: #7dd3fc;
@@ -441,6 +445,39 @@ body,
   background: #131c30;
   color: #94a3b8;
   font-size: 12px;
+}
+
+.panel h3.mine {
+  color: #f5b642;
+}
+.mine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -8px;
+}
+.mine-item {
+  display: block;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border-left: 2px solid #f5b642;
+  background: rgba(245, 182, 66, 0.06);
+  margin-bottom: 3px;
+  text-decoration: none;
+  color: inherit;
+}
+a.mine-item:hover {
+  background: rgba(245, 182, 66, 0.14);
+}
+.mine-title {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: #f1f5f9;
+}
+.mine-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
 }
 
 .lib-panel {

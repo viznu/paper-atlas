@@ -63,9 +63,12 @@ export type Focus =
 
 export interface LibraryEntry {
   key: string;
+  zoteroKey: string | null;
   title: string;
   year: number | null;
+  authors: string[];
   subfield: string | null;
+  topic: string | null;
   confidence: number;
 }
 export interface FrontierGap {
@@ -79,6 +82,7 @@ export interface FrontierGap {
 export interface Overlay {
   stats: { total: number; matched: number; placed: number };
   itemsBySubfield: Record<string, LibraryEntry[]>;
+  itemsByTopic: Record<string, LibraryEntry[]>;
   coverage: Record<string, number>;
   coverageByTopic: Record<string, number>;
   frontier: FrontierGap[];

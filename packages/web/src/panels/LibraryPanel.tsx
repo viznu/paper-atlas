@@ -45,8 +45,12 @@ export default function LibraryPanel({ basemap, library, syncing, onSync, onNavi
       {ov && (
         <>
           <p className="muted small">
-            {ov.stats.placed} of {ov.stats.total} items placed ·{' '}
-            {Object.keys(ov.coverage).length} territories covered
+            {ov.stats.matched} of {ov.stats.total} papers matched to OpenAlex ·{' '}
+            {ov.stats.placed} shown on this map · {Object.keys(ov.coverage).length} territories
+          </p>
+          <p className="muted small dim">
+            (only {ov.stats.placed} placed because this is the 30-subfield preview map — the full
+            map places them all.)
           </p>
           <h4 className="reading">You&apos;re reading in</h4>
           <ol className="covered">

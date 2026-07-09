@@ -13,9 +13,12 @@ interface Basemap {
 
 export interface LibraryEntry {
   key: string;
+  zoteroKey: string | null; // for zotero://select deep links
   title: string;
   year: number | null;
+  authors: string[];
   subfield: string | null; // "subfields/1702"
+  topic: string | null; // "T10883"
   confidence: number;
 }
 
@@ -23,6 +26,8 @@ export interface Overlay {
   stats: { total: number; matched: number; placed: number };
   /** subfieldId -> library items placed there (drawn as glowing dots on the territory). */
   itemsBySubfield: Record<string, LibraryEntry[]>;
+  /** topicId -> library items in that topic (shown when a topic is opened). */
+  itemsByTopic: Record<string, LibraryEntry[]>;
   /** subfieldId -> count, for territory brightness. */
   coverage: Record<string, number>;
   /** topicId -> count, for the topic treemap heat. */
@@ -47,11 +52,32 @@ export interface Overlay {
  * (summed citation-flow weight), discounted by how much you already cover it — so the
  * top of the list is "adjacent to what you read, but under-explored".
  */
-export function computeOverlay(matched: MatchedItem[], basemap: Basemap): Overlay {
+const normTitle = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/<[^>]+>/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/** Collapse duplicate library entries (same paper stored several times in Zotero). */
+function dedupe(matched: MatchedItem[]): MatchedItem[] {
+  const seen = new Map<string, MatchedItem>();
+  for (const m of matched) {
+    const key = normTitle(m.item.title) || m.item.key;
+    const prev = seen.get(key);
+    // keep the highest-confidence match for a given title
+    if (!prev || m.confidence > prev.confidence) seen.set(key, m);
+  }
+  return [...seen.values()];
+}
+
+export function computeOverlay(matchedRaw: MatchedItem[], basemap: Basemap): Overlay {
+  const matched = dedupe(matchedRaw);
   const subfieldById = new Map(basemap.subfields.map((s) => [s.id, s]));
   const fieldName = new Map(basemap.fields.map((f) => [f.id, f.name]));
 
   const itemsBySubfield: Record<string, LibraryEntry[]> = {};
+  const itemsByTopic: Record<string, LibraryEntry[]> = {};
   const coverage: Record<string, number> = {};
   const coverageByTopic: Record<string, number> = {};
   let placed = 0;
@@ -60,19 +86,28 @@ export function computeOverlay(matched: MatchedItem[], basemap: Basemap): Overla
   for (const m of matched) {
     const sid = m.work?.subfield?.id;
     if (!sid || !subfieldById.has(sid)) continue;
+    const tid = m.work?.topic?.id ?? null;
     const entry: LibraryEntry = {
       key: m.item.key,
+      zoteroKey: m.item.zoteroKey,
       title: m.item.title,
       year: m.item.year,
+      authors: m.item.creators.slice(0, 3),
       subfield: sid,
+      topic: tid,
       confidence: m.confidence,
     };
     (itemsBySubfield[sid] ??= []).push(entry);
     coverage[sid] = (coverage[sid] ?? 0) + 1;
-    const tid = m.work?.topic?.id;
-    if (tid) coverageByTopic[tid] = (coverageByTopic[tid] ?? 0) + 1;
+    if (tid) {
+      (itemsByTopic[tid] ??= []).push(entry);
+      coverageByTopic[tid] = (coverageByTopic[tid] ?? 0) + 1;
+    }
     placed++;
   }
+  // newest first within each bucket
+  for (const list of Object.values(itemsBySubfield)) list.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
+  for (const list of Object.values(itemsByTopic)) list.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
 
   // Frontier scoring: accumulate flow from each covered subfield to its neighbors.
   const frontierScore = new Map<string, number>();
@@ -112,6 +147,7 @@ export function computeOverlay(matched: MatchedItem[], basemap: Basemap): Overla
   return {
     stats: { total: matched.length, matched: matchedCount, placed },
     itemsBySubfield,
+    itemsByTopic,
     coverage,
     coverageByTopic,
     frontier,

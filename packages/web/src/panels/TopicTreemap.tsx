@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import type { Basemap, BasemapTopic, Focus, Overlay } from '../types';
-import { buildFieldHues } from '../palette';
+import { buildFieldColors } from '../palette';
 import { squarify } from '../treemap';
 
 interface Props {
@@ -39,7 +39,7 @@ export default function TopicTreemap({
 
   const hue = useMemo(() => {
     const sf = basemap.subfields.find((s) => s.id === subfieldId);
-    return sf ? (buildFieldHues(basemap).get(sf.field) ?? 210) : 210;
+    return sf ? (buildFieldColors(basemap).get(sf.field)?.h ?? 210) : 210;
   }, [basemap, subfieldId]);
 
   const tiles = useMemo(() => {

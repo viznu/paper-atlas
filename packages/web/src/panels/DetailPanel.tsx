@@ -1,6 +1,34 @@
 import { useEffect, useState } from 'react';
 import { fetchWorks } from '../api';
-import type { Basemap, Focus, WorkSummary } from '../types';
+import type { Basemap, Focus, LibraryEntry, Overlay, WorkSummary } from '../types';
+
+/** The user's own papers placed in this subfield/topic — shown even when OpenAlex is rate-limited. */
+function LibraryHere({ items }: { items: LibraryEntry[] }) {
+  if (!items.length) return null;
+  return (
+    <>
+      <h3 className="mine">In your library here ({items.length})</h3>
+      <div className="mine-list">
+        {items.map((it) => {
+          const href = it.zoteroKey
+            ? `zotero://select/library/items/${it.zoteroKey}`
+            : undefined;
+          const Row = href ? 'a' : 'div';
+          return (
+            <Row key={it.key} className="mine-item" {...(href ? { href } : {})}>
+              <div className="mine-title">{it.title}</div>
+              <div className="mine-meta">
+                {it.authors[0] ?? ''}
+                {it.authors.length > 1 ? ' et al.' : ''}
+                {it.year ? ` · ${it.year}` : ''}
+              </div>
+            </Row>
+          );
+        })}
+      </div>
+    </>
+  );
+}
 
 function PaperList({ kind, id }: { kind: 'subfield' | 'topic'; id: string }) {
   const [mode, setMode] = useState<'top' | 'recent'>('top');
@@ -65,17 +93,19 @@ function PaperList({ kind, id }: { kind: 'subfield' | 'topic'; id: string }) {
 interface Props {
   basemap: Basemap;
   focus: Focus | null;
+  overlay: Overlay | null;
   onNavigate: (focus: Focus) => void;
   onClose: () => void;
 }
 
-export default function DetailPanel({ basemap, focus, onNavigate, onClose }: Props) {
+export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClose }: Props) {
   if (!focus || focus.kind === 'field') return null;
 
   if (focus.kind === 'subfield') {
     const sf = basemap.subfields.find((s) => s.id === focus.id);
     if (!sf) return null;
     const field = basemap.fields.find((f) => f.id === sf.field);
+    const mine = overlay?.itemsBySubfield[sf.id] ?? [];
     const topics = basemap.topics
       .filter((t) => t.subfield === sf.id)
       .sort((a, b) => b.worksCount - a.worksCount);
@@ -99,6 +129,7 @@ export default function DetailPanel({ basemap, focus, onNavigate, onClose }: Pro
             </>
           )}
         </p>
+        <LibraryHere items={mine} />
         <h3>Cites into / cited by</h3>
         <p className="muted small">
           Nearest neighbors by citation flow — the subfields this one exchanges the most citations
@@ -141,6 +172,7 @@ export default function DetailPanel({ basemap, focus, onNavigate, onClose }: Pro
   const topic = basemap.topics.find((t) => t.id === focus.id);
   if (!topic) return null;
   const sf = basemap.subfields.find((s) => s.id === topic.subfield);
+  const mine = overlay?.itemsByTopic[topic.id] ?? [];
   return (
     <aside className="panel">
       <button className="close" onClick={onClose}>
@@ -165,6 +197,7 @@ export default function DetailPanel({ basemap, focus, onNavigate, onClose }: Pro
         )}
       </p>
       {topic.summary && <p className="summary">{topic.summary}…</p>}
+      <LibraryHere items={mine} />
       {topic.keywords.length > 0 && (
         <>
           <h3>Keywords</h3>
@@ -177,7 +210,7 @@ export default function DetailPanel({ basemap, focus, onNavigate, onClose }: Pro
           </div>
         </>
       )}
-      <h3>Papers</h3>
+      <h3>All papers in this topic</h3>
       <PaperList kind="topic" id={topic.id} />
     </aside>
   );

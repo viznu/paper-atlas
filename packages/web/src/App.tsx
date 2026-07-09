@@ -153,6 +153,7 @@ export default function App() {
               <DetailPanel
                 basemap={basemap}
                 focus={focus}
+                overlay={library?.overlay ?? null}
                 onNavigate={navigate}
                 onClose={() => setStack((s) => s.slice(0, -1))}
               />
