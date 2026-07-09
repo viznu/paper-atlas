@@ -47,11 +47,19 @@ export interface WorkSummary {
   topic: string | null;
 }
 
+const stripMarkup = (s: string) =>
+  s
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+
 function toWorkSummary(w: any): WorkSummary {
   return {
     id: (w.id as string).replace('https://openalex.org/', ''),
     doi: w.doi ?? null,
-    title: w.display_name ?? '(untitled)',
+    title: w.display_name ? stripMarkup(w.display_name) : '(untitled)',
     year: w.publication_year ?? null,
     citedBy: w.cited_by_count ?? 0,
     authors: (w.authorships ?? []).slice(0, 6).map((a: any) => a.author?.display_name ?? '?'),

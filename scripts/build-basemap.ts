@@ -41,7 +41,9 @@ const OUT_PATH = argValue('out') ?? join(ROOT, 'packages', 'basemap-data', 'data
 
 // ---------- polite fetch with cache, retry, throttle ----------
 let lastRequestAt = 0;
-const MIN_SPACING_MS = 110; // ~9 req/s, under OpenAlex's 10/s polite limit
+const MIN_SPACING_MS = 150; // ~6.5 req/s, comfortably under OpenAlex's 10/s polite limit
+const MAX_ATTEMPTS = 8;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchJson(url: string): Promise<any> {
   const cacheKey = url.replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 180);
@@ -49,14 +51,18 @@ async function fetchJson(url: string): Promise<any> {
   if (existsSync(cacheFile)) return JSON.parse(readFileSync(cacheFile, 'utf8'));
 
   const withMailto = MAILTO ? `${url}${url.includes('?') ? '&' : '?'}mailto=${MAILTO}` : url;
-  for (let attempt = 0; attempt < 6; attempt++) {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const wait = lastRequestAt + MIN_SPACING_MS - Date.now();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    if (wait > 0) await sleep(wait);
     lastRequestAt = Date.now();
+    // exponential backoff with jitter, capped at 30s, for both retryable statuses and throws
+    const backoff = Math.min(30_000, 1500 * 2 ** attempt) + Math.floor(attempt * 250);
     try {
       const res = await fetch(withMailto);
       if (res.status === 429 || res.status >= 500) {
-        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+        lastErr = new Error(`${res.status} ${res.statusText} for ${url}`);
+        if (attempt < MAX_ATTEMPTS - 1) await sleep(backoff);
         continue;
       }
       if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
@@ -65,11 +71,11 @@ async function fetchJson(url: string): Promise<any> {
       writeFileSync(cacheFile, JSON.stringify(json));
       return json;
     } catch (err) {
-      if (attempt === 5) throw err;
-      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+      lastErr = err;
+      if (attempt < MAX_ATTEMPTS - 1) await sleep(backoff);
     }
   }
-  throw new Error(`unreachable: ${url}`);
+  throw new Error(`giving up on ${url} after ${MAX_ATTEMPTS} attempts: ${String(lastErr)}`);
 }
 
 async function fetchAllPages(entity: string, perPage: number): Promise<any[]> {
@@ -113,7 +119,15 @@ for (const sf of subfieldsRaw) {
     `${API}/works?filter=primary_topic.subfield.id:${sid},from_publication_date:2016-01-01&sort=cited_by_count:desc&per_page=${WORKS_PER_SUBFIELD}&select=id,referenced_works`,
   ];
   for (const q of queries) {
-    const data = await fetchJson(q);
+    let data;
+    try {
+      data = await fetchJson(q);
+    } catch (err) {
+      // A single flaky query must not abort the whole build; this subfield just gets
+      // fewer reference samples. Skipped subfields still appear on the map.
+      console.warn(`  ! skipped a query for ${sf.display_name}: ${String(err)}`);
+      continue;
+    }
     for (const w of data.results) {
       for (const ref of w.referenced_works ?? []) {
         const rid = shortId(ref);
@@ -137,13 +151,21 @@ const resolved: Record<string, string | null> = existsSync(RESOLVE_CACHE)
 const toResolve = [...allRefIds].filter((id) => !(id in resolved));
 for (let i = 0; i < toResolve.length; i += 50) {
   const batch = toResolve.slice(i, i + 50);
-  const data = await fetchJson(
-    `${API}/works?filter=openalex_id:${batch.join('|')}&per_page=50&select=id,primary_topic`,
-  );
-  for (const w of data.results) {
-    resolved[shortId(w.id)] = w.primary_topic?.subfield?.id ? shortId(w.primary_topic.subfield.id) : null;
+  try {
+    const data = await fetchJson(
+      `${API}/works?filter=openalex_id:${batch.join('|')}&per_page=50&select=id,primary_topic`,
+    );
+    for (const w of data.results) {
+      resolved[shortId(w.id)] = w.primary_topic?.subfield?.id
+        ? shortId(w.primary_topic.subfield.id)
+        : null;
+    }
+    for (const id of batch) if (!(id in resolved)) resolved[id] = null; // deleted/missing works
+  } catch (err) {
+    // Skip this batch; those references simply won't contribute to the flow matrix.
+    // Leave them unresolved (not cached) so a later run can retry them.
+    console.warn(`  ! skipped a resolve batch: ${String(err)}`);
   }
-  for (const id of batch) if (!(id in resolved)) resolved[id] = null; // deleted/missing works
   if ((i / 50) % 40 === 0) {
     writeFileSync(RESOLVE_CACHE, JSON.stringify(resolved));
     console.log(`  ${Math.min(i + 50, toResolve.length)}/${toResolve.length} resolved`);
