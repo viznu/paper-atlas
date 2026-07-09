@@ -1,0 +1,10 @@
+{
+  "name": "@paper-atlas/basemap-data",
+  "version": "0.1.0",
+  "description": "Precomputed base map of science (OpenAlex fields/subfields/topics laid out by citation flow) shipped with paper-atlas.",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "data"
+  ]
+}

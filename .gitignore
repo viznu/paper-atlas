@@ -1,0 +1,19 @@
+# dependencies / build
+node_modules/
+dist/
+*.tsbuildinfo
+
+# caches and local state
+.cache/
+scripts/.cache/
+*.log
+.DS_Store
+.env
+.env.*
+
+# server bundles a copy of the basemap at build time
+packages/server/public/basemap.json
+
+# internal notes never ship in this public repo
+notes/
+NOTES-*.md

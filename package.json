@@ -1,0 +1,28 @@
+{
+  "name": "paper-atlas-root",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build -w @paper-atlas/web && npm run build -w paper-atlas",
+    "dev:server": "npm run dev -w paper-atlas",
+    "dev:web": "npm run dev -w @paper-atlas/web",
+    "test": "vitest run",
+    "typecheck": "npm run typecheck -w paper-atlas && npm run typecheck -w @paper-atlas/web",
+    "basemap": "tsx scripts/build-basemap.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "graphology": "^0.25.4",
+    "graphology-layout-forceatlas2": "^0.10.1",
+    "prettier": "^3.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

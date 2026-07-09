@@ -1,0 +1,32 @@
+{
+  "name": "paper-atlas",
+  "version": "0.1.0",
+  "description": "Explore an interactive map of science and overlay your own research library on it.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vsnry/paper-atlas"
+  },
+  "bin": {
+    "paper-atlas": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "public"
+  ],
+  "scripts": {
+    "dev": "tsx watch src/cli.ts --dev --no-open",
+    "build": "tsc -p tsconfig.json && node ./copy-assets.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.0.0",
+    "fastify": "^5.2.0",
+    "open": "^10.1.0"
+  }
+}
