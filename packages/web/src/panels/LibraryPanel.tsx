@@ -13,8 +13,12 @@ interface Props {
  * "where to explore next" — each jumping to that territory on the map.
  */
 export default function LibraryPanel({ basemap, library, syncing, onSync, onNavigate }: Props) {
-  void basemap;
   if (!library) return null;
+  const nameOf = (id: string) => basemap.subfields.find((s) => s.id === id)?.name ?? id;
+  const fieldOf = (id: string) => {
+    const s = basemap.subfields.find((x) => x.id === id);
+    return s ? (basemap.fields.find((f) => f.id === s.field)?.name ?? '') : '';
+  };
 
   if (!library.configured) {
     return (
@@ -44,6 +48,25 @@ export default function LibraryPanel({ basemap, library, syncing, onSync, onNavi
             {ov.stats.placed} of {ov.stats.total} items placed ·{' '}
             {Object.keys(ov.coverage).length} territories covered
           </p>
+          <h4 className="reading">You&apos;re reading in</h4>
+          <ol className="covered">
+            {Object.entries(ov.coverage)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 8)
+              .map(([id, count]) => {
+                const max = Math.max(1, ...Object.values(ov.coverage));
+                return (
+                  <li key={id}>
+                    <button onClick={() => onNavigate({ kind: 'subfield', id })}>
+                      <span className="cov-bar" style={{ width: `${(count / max) * 100}%` }} />
+                      <span className="cov-name">{nameOf(id)}</span>
+                      <span className="cov-sub muted small">{fieldOf(id)}</span>
+                      <span className="cov-count">{count}</span>
+                    </button>
+                  </li>
+                );
+              })}
+          </ol>
           <h4>Explore next — frontier gaps</h4>
           <p className="muted small">
             Territories your reading cites into, but that you haven&apos;t explored.

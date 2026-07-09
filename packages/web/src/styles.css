@@ -419,6 +419,55 @@ body,
   color: #64748b;
   cursor: default;
 }
+.lib-panel h4.reading {
+  color: #7dd3fc;
+}
+.covered {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 6px;
+}
+.covered li button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.covered li button:hover {
+  background: #131c30;
+}
+.cov-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(125, 211, 252, 0.22), rgba(125, 211, 252, 0.06));
+  border-radius: 6px;
+  z-index: 0;
+}
+.cov-name {
+  z-index: 1;
+  flex: 1;
+}
+.cov-sub {
+  z-index: 1;
+}
+.cov-count {
+  z-index: 1;
+  font-weight: 700;
+  color: #7dd3fc;
+}
+
 .frontier {
   list-style: none;
   padding: 0;
