@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import type { Basemap, BasemapTopic, Focus, Overlay } from '../types';
-import { buildFieldColors } from '../palette';
+import { buildFieldColors, HEAT, mix } from '../palette';
 import { squarify } from '../treemap';
 
 interface Props {
@@ -37,9 +37,9 @@ export default function TopicTreemap({
     return () => ro.disconnect();
   }, []);
 
-  const hue = useMemo(() => {
+  const fieldColor = useMemo(() => {
     const sf = basemap.subfields.find((s) => s.id === subfieldId);
-    return sf ? (buildFieldColors(basemap).get(sf.field)?.h ?? 210) : 210;
+    return (sf && buildFieldColors(basemap).get(sf.field)) || '#4c72b0';
   }, [basemap, subfieldId]);
 
   const tiles = useMemo(() => {
@@ -62,7 +62,7 @@ export default function TopicTreemap({
           const c = cov[t.id] ?? 0;
           const heat = c / maxCov;
           const active = t.id === activeTopicId;
-          const fill = c > 0 ? `hsl(38 85% ${28 + heat * 22}%)` : `hsl(${hue} 32% 20%)`;
+          const fill = c > 0 ? mix('#3a2c14', HEAT, 0.35 + heat * 0.5) : mix(fieldColor, '#0a0f1a', 0.5);
           const pad = 1;
           const showLabel = tile.w > 46 && tile.h > 20;
           return (

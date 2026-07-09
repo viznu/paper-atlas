@@ -1,19 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Delaunay } from 'd3-delaunay';
 import type { Basemap, BasemapSubfield, BasemapTopic, Focus, Overlay } from '../types';
-import {
-  buildFieldColors,
-  chaikin,
-  heatGradient,
-  labelColor,
-  paintBackground,
-  territoryGradient,
-  territoryGlow,
-  territoryStroke,
-} from '../palette';
+import { buildFieldColors, HEAT, labelColor, mix, OCEAN, paintBackground, shade } from '../palette';
 
 /** World-space bounds of the basemap layout (see scripts/build-basemap.ts). */
 const WORLD = { min: -40, max: 1070 };
+const HEX_R = 15; // hex radius in world units (grid resolution)
 
 interface View {
   x: number; // world coord at canvas left
@@ -51,44 +43,33 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
   const geo = useMemo(() => {
     const subfields = basemap.subfields;
     const seeds: [number, number][] = subfields.map((s) => [s.x, s.y]);
-    // Contiguous continents: one voronoi cell per subfield, filling the plane so cells share
-    // borders (no ocean gaps). The organic outline comes from the coastline, not the cells.
     const delaunay = Delaunay.from(seeds);
-    const voronoi = delaunay.voronoi([WORLD.min, WORLD.min, WORLD.max, WORLD.max]);
-    const cells: ([number, number][] | null)[] = subfields.map(
-      (_, i) => (voronoi.cellPolygon(i) as [number, number][] | null) ?? null,
-    );
-    // Coastline = expanded, smoothed convex hull of the subfields → the landmass outline.
-    const hull = convexHull(seeds);
-    const cx = seeds.reduce((a, p) => a + p[0], 0) / seeds.length;
-    const cy = seeds.reduce((a, p) => a + p[1], 0) / seeds.length;
-    const expand = (pts: [number, number][], margin: number): [number, number][] =>
-      pts.map(([px, py]) => {
-        const dx = px - cx;
-        const dy = py - cy;
-        const d = Math.hypot(dx, dy) || 1;
-        return [px + (dx / d) * margin, py + (dy / d) * margin] as [number, number];
-      });
-    const coastline = chaikin(expand(hull, 58), 3);
-    // Faint interior "contour" rings for topographic texture (coast scaled toward the centroid).
-    const contour = (t: number) =>
-      chaikin(
-        expand(hull, 58).map(([px, py]) => [cx + (px - cx) * t, cy + (py - cy) * t] as [number, number]),
-        3,
-      );
-    const contours = [contour(0.82), contour(0.6), contour(0.4)];
-    // Gradient radius per cell, capped so edge cells that reach far don't over-bloom.
-    const cellRadius = subfields.map((s, i) => {
-      const c = cells[i];
-      if (!c) return 60;
-      let m = 0;
-      for (const [px, py] of c) m = Math.max(m, Math.hypot(px - s.x, py - s.y));
-      return Math.max(28, Math.min(150, m));
-    });
-    const centroid: [number, number] = [cx, cy];
+
+    // Hex-tile map: a pointy-top honeycomb covering the whole plane; every hex belongs to its
+    // nearest subfield, so subfields become contiguous clusters of same-coloured hexes.
+    const hexCorners: [number, number][] = [];
+    for (let c = 0; c < 6; c++) {
+      const a = (Math.PI / 180) * (60 * c - 30);
+      hexCorners.push([HEX_R * Math.cos(a), HEX_R * Math.sin(a)]);
+    }
+    const hStep = Math.sqrt(3) * HEX_R; // horizontal spacing
+    const vStep = 1.5 * HEX_R; // vertical spacing
+    const hexes: { cx: number; cy: number; sub: number }[] = [];
+    let probe = 0;
+    let row = 0;
+    for (let y = WORLD.min; y <= WORLD.max; y += vStep, row++) {
+      const xoff = (row % 2) * (hStep / 2);
+      for (let x = WORLD.min + xoff; x <= WORLD.max; x += hStep) {
+        probe = delaunay.find(x, y, probe);
+        hexes.push({ cx: x, cy: y, sub: probe });
+      }
+    }
+    // hexes belonging to each subfield (for coverage tints + seed markers)
+    const hexesBySub = new Map<number, number[]>();
+    hexes.forEach((hx, i) => hexesBySub.set(hx.sub, [...(hexesBySub.get(hx.sub) ?? []), i]));
+
     const fieldColors = buildFieldColors(basemap);
-    const colorOf = (s: BasemapSubfield) =>
-      fieldColors.get(s.field) ?? { h: 210, s: 60, l: 46 };
+    const colorOf = (s: BasemapSubfield) => fieldColors.get(s.field) ?? '#6b7f99';
     const subfieldIndex = new Map(subfields.map((s, i) => [s.id, i]));
     const membersByField = new Map<string, number[]>();
     subfields.forEach((s, i) => {
@@ -116,11 +97,9 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
     return {
       seeds,
       delaunay,
-      cells,
-      coastline,
-      contours,
-      centroid,
-      cellRadius,
+      hexes,
+      hexCorners,
+      hexesBySub,
       colorOf,
       subfieldIndex,
       membersByField,
@@ -131,18 +110,20 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
   }, [basemap]);
 
   // ---------- bounds helpers for the drill-down camera ----------
+  // Bounds of a subfield = bounds of its hexes (falls back to a radius around the seed).
   const cellBounds = (i: number): Bounds | null => {
-    const cell = geo.cells[i];
-    if (!cell) return null;
+    const hs = geo.hexesBySub.get(i);
+    if (!hs || !hs.length) return null;
     let minX = Infinity,
       minY = Infinity,
       maxX = -Infinity,
       maxY = -Infinity;
-    for (const [px, py] of cell) {
-      minX = Math.min(minX, px);
-      minY = Math.min(minY, py);
-      maxX = Math.max(maxX, px);
-      maxY = Math.max(maxY, py);
+    for (const hi of hs) {
+      const h = geo.hexes[hi]!;
+      minX = Math.min(minX, h.cx - HEX_R);
+      minY = Math.min(minY, h.cy - HEX_R);
+      maxX = Math.max(maxX, h.cx + HEX_R);
+      maxY = Math.max(maxY, h.cy + HEX_R);
     }
     return { minX, minY, maxX, maxY };
   };
@@ -234,113 +215,62 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       const inFocusField = (s: BasemapSubfield) =>
         fieldFocus ? s.field === fieldFocus : true;
 
-      // ocean floor beneath the landmass (so the coast reads against the space background)
-      traceSmooth(ctx, geo.coastline);
-      ctx.fillStyle = 'rgba(9, 15, 28, 0.92)';
-      ctx.fill();
+      const ov = overlayRef.current;
+      const maxCov = ov ? Math.max(1, ...Object.values(ov.coverage)) : 1;
+      const frontierRank = new Map(ov ? ov.frontier.map((g, i) => [g.id, i]) : []);
+      const corners = geo.hexCorners;
+      const traceHex = (hx: number, hy: number) => {
+        ctx.beginPath();
+        ctx.moveTo(hx + corners[0]![0], hy + corners[0]![1]);
+        for (let c = 1; c < 6; c++) ctx.lineTo(hx + corners[c]![0], hy + corners[c]![1]);
+        ctx.closePath();
+      };
 
-      // Everything inside the coastline is clipped to it, so the continent has an organic edge
-      // while its internal territories are crisp, border-sharing regions.
-      ctx.save();
-      traceSmooth(ctx, geo.coastline);
-      ctx.clip();
-
-      for (let i = 0; i < basemap.subfields.length; i++) {
-        const cell = geo.cells[i];
-        if (!cell) continue;
-        const s = basemap.subfields[i]!;
-        const color = geo.colorOf(s);
-        const isHover = hoverRef.current === i;
-        const isFocus = focusIdx === i;
+      // hex tiles — one honeycomb cell per grid point, coloured by its subfield's field
+      for (const hex of geo.hexes) {
+        const s = basemap.subfields[hex.sub]!;
+        const base = geo.colorOf(s);
+        const isFocus = focusIdx === hex.sub;
         const isNeighbor = neighborIds.has(s.id);
+        const isHover = hoverRef.current === hex.sub;
         const dim =
           (fieldFocus != null && !inFocusField(s)) ||
           (focusSubfield != null && !isFocus && !isNeighbor && !isHover);
-        traceSmooth(ctx, cell);
-        ctx.fillStyle = territoryGradient(ctx, s.x, s.y, geo.cellRadius[i]!, color, {
-          hover: isHover,
-          focus: isFocus,
-          dim,
-        });
-        if (isFocus || isNeighbor) {
-          ctx.save();
-          ctx.shadowColor = territoryGlow(color);
-          ctx.shadowBlur = (isFocus ? 26 : 14) * k;
-          ctx.fill();
-          ctx.restore();
-        } else {
-          ctx.fill();
-        }
-        // internal border (like country lines)
-        ctx.strokeStyle = isFocus || isNeighbor ? territoryGlow(color) : territoryStroke(color, dim);
-        ctx.lineWidth = (isFocus ? 1.8 : isNeighbor ? 1.1 : 0.6) / k;
-        ctx.globalAlpha = isFocus ? 0.95 : isNeighbor ? 0.6 : 0.7;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
-
-      // faint topographic contour rings for texture
-      for (const c of geo.contours) {
-        traceSmooth(ctx, c);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
-        ctx.lineWidth = 1 / k;
+        let fill = base;
+        if (dim) fill = mix(base, OCEAN, 0.74);
+        else if (isFocus || isHover) fill = shade(base, 16);
+        else if (isNeighbor) fill = shade(base, 7);
+        const count = ov ? (ov.coverage[s.id] ?? 0) : 0;
+        if (count > 0 && !dim) fill = mix(fill, HEAT, Math.min(0.6, 0.22 + (count / maxCov) * 0.42));
+        traceHex(hex.cx, hex.cy);
+        ctx.fillStyle = fill;
+        ctx.fill();
+        const rank = frontierRank.get(s.id);
+        const isFrontier = count === 0 && rank != null && rank < 10 && !dim;
+        ctx.strokeStyle = isFrontier ? 'rgba(245,182,66,0.7)' : 'rgba(6,10,18,0.5)';
+        ctx.lineWidth = (isFrontier ? 1.2 : 0.8) / k;
         ctx.stroke();
       }
 
-      // library overlay: coverage heat, frontier rings, library dots
-      const ov = overlayRef.current;
+      // library-item dots + focus ring at each covered subfield's seed
       if (ov) {
-        const maxCov = Math.max(1, ...Object.values(ov.coverage));
-        const frontierRank = new Map(ov.frontier.map((g, i) => [g.id, i]));
         for (let i = 0; i < basemap.subfields.length; i++) {
-          const cell = geo.cells[i];
-          if (!cell) continue;
           const s = basemap.subfields[i]!;
           if (fieldFocus && !inFocusField(s)) continue;
           const count = ov.coverage[s.id] ?? 0;
-          const rank = frontierRank.get(s.id);
-          if (count === 0 && rank != null && rank < 10) {
-            traceSmooth(ctx, cell);
-            ctx.strokeStyle = '#f5b642';
-            ctx.globalAlpha = 0.85 - rank * 0.06;
-            ctx.lineWidth = 1.8 / k;
-            ctx.setLineDash([6 / k, 4 / k]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.globalAlpha = 1;
-          }
-          if (count > 0) {
-            const rr = geo.cellRadius[i]!;
-            traceSmooth(ctx, cell);
-            ctx.fillStyle = heatGradient(ctx, s.x, s.y, rr, count / maxCov);
+          if (count <= 0) continue;
+          const dots = Math.min(count, 36);
+          const spread = 8 + Math.sqrt(count) * 2.2;
+          for (let d = 0; d < dots; d++) {
+            const r = spread * Math.sqrt((d + 0.5) / dots);
+            const a = d * 2.399963229728653;
+            ctx.beginPath();
+            ctx.arc(s.x + r * Math.cos(a), s.y + r * Math.sin(a), Math.max(0.6, 2 / Math.sqrt(k)), 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(255, 250, 235, 0.95)';
             ctx.fill();
-            const dots = Math.min(count, 40);
-            const spread = 9 + Math.sqrt(count) * 2.3;
-            for (let d = 0; d < dots; d++) {
-              const r = spread * Math.sqrt((d + 0.5) / dots);
-              const a = d * 2.399963229728653;
-              ctx.beginPath();
-              ctx.arc(s.x + r * Math.cos(a), s.y + r * Math.sin(a), Math.max(0.7, 2.2 / Math.sqrt(k)), 0, 2 * Math.PI);
-              ctx.fillStyle = '#fff7e6';
-              ctx.globalAlpha = 0.95;
-              ctx.fill();
-              ctx.globalAlpha = 1;
-            }
           }
         }
       }
-
-      ctx.restore(); // end coastline clip
-
-      // glowing coastline on top
-      ctx.save();
-      traceSmooth(ctx, geo.coastline);
-      ctx.shadowColor = 'rgba(120, 175, 255, 0.55)';
-      ctx.shadowBlur = 16 * k;
-      ctx.strokeStyle = 'rgba(150, 200, 255, 0.5)';
-      ctx.lineWidth = 2.4 / k;
-      ctx.stroke();
-      ctx.restore();
 
       // neighbor flow arcs from the focused subfield
       if (focusSubfield) {
@@ -354,8 +284,8 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
           ctx.beginPath();
           ctx.moveTo(focusSubfield.x, focusSubfield.y);
           ctx.quadraticCurveTo(midX, midY, t.x, t.y);
-          ctx.strokeStyle = territoryGlow(geo.colorOf(focusSubfield));
-          ctx.globalAlpha = 0.5;
+          ctx.strokeStyle = shade(geo.colorOf(focusSubfield), 30);
+          ctx.globalAlpha = 0.55;
           ctx.lineWidth = Math.max(0.6, 6 * n.w) / k;
           ctx.stroke();
           ctx.globalAlpha = 1;
@@ -490,8 +420,8 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
     };
 
     const subfieldAt = (wx: number, wy: number): number | null => {
-      // Only land counts: ignore clicks in the ocean outside the coastline.
-      if (!pointInPoly(wx, wy, geo.coastline)) return null;
+      // The hex grid fills the plane; only register clicks within the mapped world bounds.
+      if (wx < WORLD.min || wx > WORLD.max || wy < WORLD.min || wy > WORLD.max) return null;
       const i = geo.delaunay.find(wx, wy);
       return i < basemap.subfields.length ? i : null;
     };
@@ -598,47 +528,6 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
   return <canvas ref={canvasRef} className="atlas-canvas" />;
 }
 
-function traceSmooth(ctx: CanvasRenderingContext2D, cell: [number, number][]) {
-  ctx.beginPath();
-  ctx.moveTo(cell[0]![0], cell[0]![1]);
-  for (const [px, py] of cell.slice(1)) ctx.lineTo(px, py);
-  ctx.closePath();
-}
-
-/** Convex hull via Andrew's monotone chain (counter-clockwise, no repeated endpoint). */
-function convexHull(pts: [number, number][]): [number, number][] {
-  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  if (p.length < 3) return p;
-  const cross = (o: number[], a: number[], b: number[]) =>
-    (a[0]! - o[0]!) * (b[1]! - o[1]!) - (a[1]! - o[1]!) * (b[0]! - o[0]!);
-  const lower: [number, number][] = [];
-  for (const q of p) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, q) <= 0)
-      lower.pop();
-    lower.push(q);
-  }
-  const upper: [number, number][] = [];
-  for (let i = p.length - 1; i >= 0; i--) {
-    const q = p[i]!;
-    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, q) <= 0)
-      upper.pop();
-    upper.push(q);
-  }
-  lower.pop();
-  upper.pop();
-  return lower.concat(upper);
-}
-
-/** Ray-cast point-in-polygon (used to tell land clicks from ocean clicks). */
-function pointInPoly(x: number, y: number, poly: [number, number][]): boolean {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i]!;
-    const [xj, yj] = poly[j]!;
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-}
 function union(a: Bounds, b: Bounds): Bounds {
   return {
     minX: Math.min(a.minX, b.minX),
