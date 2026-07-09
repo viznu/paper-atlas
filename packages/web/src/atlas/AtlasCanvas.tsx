@@ -3,11 +3,13 @@ import { Delaunay } from 'd3-delaunay';
 import type { Basemap, BasemapSubfield, BasemapTopic, Focus, Overlay } from '../types';
 import {
   buildFieldHues,
+  chaikin,
+  heatGradient,
   labelColor,
-  territoryFill,
+  paintBackground,
+  territoryGradient,
   territoryGlow,
   territoryStroke,
-  WATER,
 } from '../palette';
 
 /** World-space bounds of the basemap layout (see scripts/build-basemap.ts). */
@@ -67,6 +69,15 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
     const cells: ([number, number][] | null)[] = subfields.map(
       (_, i) => (voronoi.cellPolygon(i) as [number, number][] | null) ?? null,
     );
+    // Smoothed (soft-continent) outlines + a rough radius for gradient sizing.
+    const smoothCells = cells.map((c) => (c ? chaikin(c.slice(0, -1), 2) : null));
+    const cellRadius = subfields.map((s, i) => {
+      const c = cells[i];
+      if (!c) return 40;
+      let m = 0;
+      for (const [px, py] of c) m = Math.max(m, Math.hypot(px - s.x, py - s.y));
+      return Math.max(20, m);
+    });
     const fieldHues = buildFieldHues(basemap);
     const hueOf = (s: BasemapSubfield) => fieldHues.get(s.field) ?? 200;
     const subfieldIndex = new Map(subfields.map((s, i) => [s.id, i]));
@@ -97,6 +108,8 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       seeds,
       delaunay,
       cells,
+      smoothCells,
+      cellRadius,
       hueOf,
       subfieldIndex,
       membersByField,
@@ -186,8 +199,7 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       const view = viewRef.current;
       const k = view.k;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = WATER;
-      ctx.fillRect(0, 0, width, height);
+      paintBackground(ctx, width, height);
       ctx.setTransform(dpr * k, 0, 0, dpr * k, -view.x * dpr * k, -view.y * dpr * k);
 
       const f = focusRef.current;
@@ -205,73 +217,80 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
       const inFocusField = (s: BasemapSubfield) =>
         fieldFocus ? s.field === fieldFocus : true;
 
-      // territories
+      // territories: soft, smoothly-bordered continents with a gently-lit radial fill
       for (let i = 0; i < basemap.subfields.length; i++) {
-        const cell = geo.cells[i];
+        const cell = geo.smoothCells[i];
         if (!cell) continue;
         const s = basemap.subfields[i]!;
         const hue = geo.hueOf(s);
         const isHover = hoverRef.current === i;
         const isFocus = focusIdx === i;
         const isNeighbor = neighborIds.has(s.id);
-        // Dim territories outside the current focus (field or subfield).
         const dim =
           (fieldFocus != null && !inFocusField(s)) ||
           (focusSubfield != null && !isFocus && !isNeighbor && !isHover);
-        ctx.beginPath();
-        ctx.moveTo(cell[0]![0], cell[0]![1]);
-        for (const [px, py] of cell.slice(1)) ctx.lineTo(px, py);
-        ctx.closePath();
-        ctx.fillStyle = territoryFill(hue, isHover || isFocus, dim);
-        ctx.fill();
-        ctx.strokeStyle = territoryStroke(hue);
-        ctx.lineWidth = 0.8 / k;
-        ctx.stroke();
+        traceSmooth(ctx, cell);
+        ctx.fillStyle = territoryGradient(ctx, s.x, s.y, geo.cellRadius[i]!, hue, {
+          hover: isHover,
+          focus: isFocus,
+          dim,
+        });
         if (isFocus || isNeighbor) {
-          ctx.strokeStyle = territoryGlow(hue);
-          ctx.lineWidth = (isFocus ? 2.4 : 1.2) / k;
-          ctx.globalAlpha = isFocus ? 0.95 : 0.55;
-          ctx.stroke();
-          ctx.globalAlpha = 1;
+          ctx.save();
+          ctx.shadowColor = territoryGlow(hue);
+          ctx.shadowBlur = (isFocus ? 26 : 14) * k;
+          ctx.fill();
+          ctx.restore();
+        } else {
+          ctx.fill();
         }
+        ctx.strokeStyle = isFocus || isNeighbor ? territoryGlow(hue) : territoryStroke(hue, dim);
+        ctx.lineWidth = (isFocus ? 1.8 : isNeighbor ? 1.2 : 0.7) / k;
+        ctx.globalAlpha = isFocus ? 0.95 : isNeighbor ? 0.6 : 1;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
       }
 
-      // library overlay: coverage glow, frontier rings, library dots
+      // library overlay: coverage heat, frontier rings, library dots
       const ov = overlayRef.current;
       if (ov) {
+        const maxCov = Math.max(1, ...Object.values(ov.coverage));
         const frontierRank = new Map(ov.frontier.map((g, i) => [g.id, i]));
         for (let i = 0; i < basemap.subfields.length; i++) {
-          const cell = geo.cells[i];
+          const cell = geo.smoothCells[i];
           if (!cell) continue;
           const s = basemap.subfields[i]!;
           if (fieldFocus && !inFocusField(s)) continue;
           const count = ov.coverage[s.id] ?? 0;
           const rank = frontierRank.get(s.id);
           if (count === 0 && rank != null && rank < 10) {
-            traceCell(ctx, cell);
+            traceSmooth(ctx, cell);
             ctx.strokeStyle = '#f5b642';
-            ctx.globalAlpha = 0.9 - rank * 0.06;
-            ctx.lineWidth = 2 / k;
+            ctx.globalAlpha = 0.85 - rank * 0.06;
+            ctx.lineWidth = 1.8 / k;
             ctx.setLineDash([6 / k, 4 / k]);
             ctx.stroke();
             ctx.setLineDash([]);
             ctx.globalAlpha = 1;
           }
           if (count > 0) {
-            traceCell(ctx, cell);
-            ctx.fillStyle = '#e8eefc';
-            ctx.globalAlpha = Math.min(0.24, 0.06 + Math.log2(count + 1) * 0.03);
-            ctx.fill();
-            ctx.globalAlpha = 1;
+            const rr = geo.cellRadius[i]!;
+            // warm heat bloom clipped to the territory
+            ctx.save();
+            traceSmooth(ctx, cell);
+            ctx.clip();
+            ctx.fillStyle = heatGradient(ctx, s.x, s.y, rr, count / maxCov);
+            ctx.fillRect(s.x - rr, s.y - rr, rr * 2, rr * 2);
+            ctx.restore();
             const dots = Math.min(count, 40);
-            const spread = 10 + Math.sqrt(count) * 2.5;
+            const spread = 9 + Math.sqrt(count) * 2.3;
             for (let d = 0; d < dots; d++) {
               const r = spread * Math.sqrt((d + 0.5) / dots);
               const a = d * 2.399963229728653;
               ctx.beginPath();
-              ctx.arc(s.x + r * Math.cos(a), s.y + r * Math.sin(a), Math.max(0.7, 2.4 / Math.sqrt(k)), 0, 2 * Math.PI);
-              ctx.fillStyle = '#ffffff';
-              ctx.globalAlpha = 0.92;
+              ctx.arc(s.x + r * Math.cos(a), s.y + r * Math.sin(a), Math.max(0.7, 2.2 / Math.sqrt(k)), 0, 2 * Math.PI);
+              ctx.fillStyle = '#fff7e6';
+              ctx.globalAlpha = 0.95;
               ctx.fill();
               ctx.globalAlpha = 1;
             }
@@ -547,7 +566,7 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
   return <canvas ref={canvasRef} className="atlas-canvas" />;
 }
 
-function traceCell(ctx: CanvasRenderingContext2D, cell: [number, number][]) {
+function traceSmooth(ctx: CanvasRenderingContext2D, cell: [number, number][]) {
   ctx.beginPath();
   ctx.moveTo(cell[0]![0], cell[0]![1]);
   for (const [px, py] of cell.slice(1)) ctx.lineTo(px, py);
