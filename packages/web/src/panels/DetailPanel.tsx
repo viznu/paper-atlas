@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchWorks } from '../api';
 import { subfieldGaps } from '../nav';
+import { masteryFor } from '../game';
 import Discover from './Discover';
 import type { Basemap, Focus, LibraryEntry, Overlay, WorkSummary } from '../types';
 
@@ -124,7 +125,14 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
         <button className="crumb linklike" onClick={() => field && onNavigate({ kind: 'field', id: field.id })}>
           ‹ {field?.name}
         </button>
-        <h2>{sf.name}</h2>
+        <h2>
+          {sf.name}
+          {mine.length > 0 && (
+            <span className={`mastery m${masteryFor(mine.length).level}`}>
+              {masteryFor(mine.length).label}
+            </span>
+          )}
+        </h2>
         <p className="muted">
           {sf.worksCount.toLocaleString()} works in OpenAlex
           {mine.length > 0 && ` · ${mine.length} in your library`}

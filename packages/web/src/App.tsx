@@ -5,6 +5,7 @@ import FieldPanel from './panels/FieldPanel';
 import LibraryPanel from './panels/LibraryPanel';
 import TopicTreemap from './panels/TopicTreemap';
 import HoverCard from './panels/HoverCard';
+import ExplorerPanel from './panels/ExplorerPanel';
 import Breadcrumb from './Breadcrumb';
 import SearchBox from './SearchBox';
 import { fetchBasemap, fetchLibrary, syncLibrary } from './api';
@@ -18,6 +19,7 @@ export default function App() {
   const [hoverSub, setHoverSub] = useState<string | null>(null);
   const [library, setLibrary] = useState<LibraryState | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [gameMode, setGameMode] = useState(false);
 
   const focus = stack.length ? stack[stack.length - 1]! : null;
 
@@ -92,6 +94,7 @@ export default function App() {
         basemap={basemap}
         focus={focus}
         overlay={library?.overlay ?? null}
+        fog={gameMode}
         onNavigate={navigate}
         hoverInfo={setHoverSub}
       />
@@ -101,6 +104,13 @@ export default function App() {
           <span className="brand-sub">a map of science, from citation flows</span>
         </div>
         <SearchBox basemap={basemap} onNavigate={navigate} />
+        <button
+          className={gameMode ? 'mode-toggle on' : 'mode-toggle'}
+          onClick={() => setGameMode((g) => !g)}
+          title="Toggle Explorer mode (fog of war + quests)"
+        >
+          {gameMode ? '🎮 Explorer on' : '🎮 Explorer'}
+        </button>
       </header>
 
       <Breadcrumb basemap={basemap} stack={stack} onGoTo={goTo} />
@@ -110,7 +120,10 @@ export default function App() {
         <HoverCard basemap={basemap} overlay={library?.overlay ?? null} subfieldId={hoverSub} />
       )}
 
-      {!focus && (
+      {!focus && gameMode && (
+        <ExplorerPanel basemap={basemap} library={library} onNavigate={navigate} />
+      )}
+      {!focus && !gameMode && (
         <LibraryPanel
           basemap={basemap}
           library={library}

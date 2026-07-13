@@ -631,6 +631,212 @@ a.mine-item:hover {
   margin-top: 2px;
 }
 
+.mastery {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.mastery.m1 {
+  background: #1e3a5f;
+  color: #7dd3fc;
+}
+.mastery.m2 {
+  background: #3a2f14;
+  color: #f5b642;
+}
+.mastery.m3 {
+  background: #3a1e14;
+  color: #fb923c;
+}
+
+.mode-toggle {
+  pointer-events: auto;
+  background: rgba(10, 16, 28, 0.85);
+  border: 1px solid #24304a;
+  color: #cbd5e1;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+.mode-toggle.on {
+  border-color: #f5b642;
+  color: #f5b642;
+  background: rgba(245, 182, 66, 0.12);
+}
+
+.explorer {
+  position: absolute;
+  top: 72px;
+  left: 16px;
+  width: 300px;
+  max-height: calc(100% - 130px);
+  overflow-y: auto;
+  padding: 16px;
+  background: rgba(10, 16, 28, 0.92);
+  border: 1px solid #2c3a58;
+  border-radius: 14px;
+  backdrop-filter: blur(10px);
+}
+.xp-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid #2c3a58;
+  background: #131c30;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+}
+.avatar:hover {
+  border-color: #f5b642;
+}
+.xp-name {
+  font-size: 16px;
+  font-weight: 700;
+}
+.char-editor {
+  margin: 10px 0;
+  padding: 10px;
+  background: #0c1322;
+  border-radius: 10px;
+}
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.av {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 1px solid #2c3a58;
+  background: #131c30;
+  font-size: 18px;
+  cursor: pointer;
+}
+.av.active {
+  border-color: #f5b642;
+  background: rgba(245, 182, 66, 0.14);
+}
+.name-input {
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 7px;
+  border: 1px solid #2c3a58;
+  background: #0a1120;
+  color: #e2e8f0;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.done-btn,
+.sync-cta {
+  width: 100%;
+  padding: 7px;
+  border-radius: 7px;
+  border: 1px solid #2c3a58;
+  background: #131c30;
+  color: #7dd3fc;
+  cursor: pointer;
+}
+.xp-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #131c30;
+  margin: 14px 0 12px;
+  overflow: hidden;
+}
+.xp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7dd3fc, #f5b642);
+  border-radius: 999px;
+}
+.explore-meter {
+  margin-bottom: 8px;
+}
+.em-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.em-pct {
+  font-size: 26px;
+  font-weight: 800;
+  color: #f5b642;
+}
+.explorer h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #94a3b8;
+  margin: 16px 0 8px;
+}
+.badges {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #0c1322;
+  border: 1px solid #1c2740;
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+.badge.earned {
+  opacity: 1;
+  filter: none;
+  border-color: #f5b642;
+  background: rgba(245, 182, 66, 0.08);
+}
+.badge-icon {
+  font-size: 18px;
+}
+.badge-name {
+  font-size: 11px;
+  color: #cbd5e1;
+}
+.quests {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.quests li button {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.quests li button:hover {
+  background: #131c30;
+}
+.quest-check {
+  color: #f5b642;
+}
+
 .lib-panel {
   position: absolute;
   top: 72px;

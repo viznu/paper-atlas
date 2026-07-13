@@ -23,11 +23,12 @@ interface Props {
   basemap: Basemap;
   focus: Focus | null; // null = world level
   overlay: Overlay | null;
+  fog?: boolean; // Explorer mode: fog unexplored territory
   hoverInfo: (subfieldId: string | null) => void;
   onNavigate: (focus: Focus) => void;
 }
 
-export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hoverInfo }: Props) {
+export default function AtlasCanvas({ basemap, focus, overlay, fog, onNavigate, hoverInfo }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View>({ x: 0, y: 0, k: 1 });
   const hoverRef = useRef<number | null>(null); // subfield index
@@ -37,6 +38,8 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
   focusRef.current = focus;
   const overlayRef = useRef<Overlay | null>(overlay);
   overlayRef.current = overlay;
+  const fogRef = useRef<boolean>(!!fog);
+  fogRef.current = !!fog;
   // Screen-space hitboxes for clickable field labels, refreshed each draw.
   const fieldHitsRef = useRef<{ id: string; x: number; y: number; w: number; h: number }[]>([]);
 
@@ -253,19 +256,26 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
         const dim =
           (fieldFocus != null && !inFocusField(s)) ||
           (focusSubfield != null && !isFocus && !isNeighbor && !isHover);
+        const count = ov ? (ov.coverage[s.id] ?? 0) : 0;
+        const rank = frontierRank.get(s.id);
+        const isFrontier = count === 0 && rank != null && rank < 10 && !dim;
+        // Explorer mode: fog everything you haven't read into (frontier "doors" still glow).
+        const fogged = fogRef.current && count === 0 && !isFrontier && !isFocus && !isNeighbor && !isHover;
         let fill = base;
-        if (dim) fill = mix(base, OCEAN, 0.74);
+        if (fogged) fill = mix(base, OCEAN, 0.9);
+        else if (dim) fill = mix(base, OCEAN, 0.74);
         else if (isFocus || isHover) fill = shade(base, 16);
         else if (isNeighbor) fill = shade(base, 7);
-        const count = ov ? (ov.coverage[s.id] ?? 0) : 0;
         if (count > 0 && !dim) fill = mix(fill, HEAT, Math.min(0.6, 0.22 + (count / maxCov) * 0.42));
         traceHex(hex.cx, hex.cy);
         ctx.fillStyle = fill;
         ctx.fill();
-        const rank = frontierRank.get(s.id);
-        const isFrontier = count === 0 && rank != null && rank < 10 && !dim;
-        ctx.strokeStyle = isFrontier ? 'rgba(245,182,66,0.7)' : 'rgba(6,10,18,0.5)';
-        ctx.lineWidth = (isFrontier ? 1.2 : 0.8) / k;
+        ctx.strokeStyle = isFrontier
+          ? 'rgba(245,182,66,0.8)'
+          : fogged
+            ? 'rgba(6,10,18,0.35)'
+            : 'rgba(6,10,18,0.5)';
+        ctx.lineWidth = (isFrontier ? 1.3 : 0.8) / k;
         ctx.stroke();
       }
 
@@ -417,7 +427,7 @@ export default function AtlasCanvas({ basemap, focus, overlay, onNavigate, hover
 
   useEffect(() => {
     dirtyRef.current = true;
-  }, [overlay]);
+  }, [overlay, fog]);
 
   // ---------- interaction ----------
   useEffect(() => {
