@@ -157,26 +157,7 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
             </>
           )}
         </p>
-        {/* Contextual stats for this subfield */}
-        <h3>Citation flow to neighbours</h3>
-        <MiniBars
-          bars={sf.neighbors.slice(0, 6).map((n) => {
-            const nb = basemap.subfields.find((s) => s.id === n.id);
-            return {
-              label: nb?.name ?? n.id,
-              value: n.w,
-              display: `${Math.round(n.w * 100)}%`,
-              onClick: nb ? () => onNavigate({ kind: 'subfield', id: n.id }) : undefined,
-            };
-          })}
-        />
-        {myTopicBars.length > 0 && (
-          <>
-            <h3 className="mine">Your reading here, by topic</h3>
-            <MiniBars bars={myTopicBars} accent="#f5b642" />
-          </>
-        )}
-
+        {/* Discovery-first: what to read next + fresh + top papers lead the panel */}
         <h3 className="explore">Discover</h3>
         <Discover
           topicGaps={overlay ? topicGaps(sf.id, basemap, overlay.coverageByTopic) : []}
@@ -185,6 +166,17 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
           onNavigate={onNavigate}
         />
 
+        <details className="section" open>
+          <summary>Top papers (OpenAlex)</summary>
+          <PaperList kind="subfield" id={sf.id} />
+        </details>
+
+        {myTopicBars.length > 0 && (
+          <>
+            <h3 className="mine">Your reading here, by topic</h3>
+            <MiniBars bars={myTopicBars} accent="#f5b642" />
+          </>
+        )}
         <LibraryHere items={mine} />
 
         <details className="section">
@@ -220,10 +212,20 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
             ))}
           </div>
         </details>
-        <details className="section">
-          <summary>Top papers (OpenAlex)</summary>
-          <PaperList kind="subfield" id={sf.id} />
-        </details>
+
+        {/* Structural citation-flow stats live at the very end */}
+        <h3>Citation flow to neighbours</h3>
+        <MiniBars
+          bars={sf.neighbors.slice(0, 6).map((n) => {
+            const nb = basemap.subfields.find((s) => s.id === n.id);
+            return {
+              label: nb?.name ?? n.id,
+              value: n.w,
+              display: `${Math.round(n.w * 100)}%`,
+              onClick: nb ? () => onNavigate({ kind: 'subfield', id: n.id }) : undefined,
+            };
+          })}
+        />
       </aside>
     );
   }
