@@ -88,7 +88,9 @@ export default function AtlasCanvas({ basemap, focus, overlay, fog, onNavigate, 
         (a, b) => (subfields[b]!.worksCount || 0) - (subfields[a]!.worksCount || 0),
       );
       ordered.forEach((idx, j) => {
-        const off = N > 1 ? -22 + (44 * j) / (N - 1) : 0; // lightness ramp within the family
+        // Gentle lightness ramp so subfields are distinguishable but clearly the SAME family
+        // (a field still reads as one colour, its subfields as lighter/darker variants of it).
+        const off = N > 1 ? -13 + (26 * j) / (N - 1) : 0;
         subfieldColor[idx] = shade(fc, off);
       });
     }

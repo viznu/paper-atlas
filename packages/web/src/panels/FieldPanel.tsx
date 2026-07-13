@@ -1,6 +1,7 @@
 import type { Basemap, Focus, Overlay } from '../types';
 import { fieldGaps } from '../nav';
 import Discover from './Discover';
+import MiniBars from './MiniBars';
 
 interface Props {
   basemap: Basemap;
@@ -23,6 +24,7 @@ export default function FieldPanel({ basemap, fieldId, overlay, onNavigate, onCl
     .sort((a, b) => b.cov - a.cov || b.s.worksCount - a.s.worksCount);
   const totalCov = subfields.reduce((a, x) => a + x.cov, 0);
   const maxCov = Math.max(1, ...subfields.map((x) => x.cov));
+  const covered = subfields.filter((x) => x.cov > 0).length;
 
   return (
     <aside className="panel">
@@ -32,10 +34,29 @@ export default function FieldPanel({ basemap, fieldId, overlay, onNavigate, onCl
       <div className="crumb">Facet</div>
       <h2>{field.name}</h2>
       <p className="muted">
-        {subfields.length} subfields
+        {subfields.length} subfields · {covered} explored
         {totalCov > 0 && ` · ${totalCov} of your items here`}
       </p>
-      <h3>Subfields {totalCov > 0 ? '(bars show your coverage)' : ''}</h3>
+
+      {totalCov > 0 && (
+        <>
+          <h3 className="mine">Your reading across this field</h3>
+          <MiniBars
+            accent="#f5b642"
+            bars={subfields
+              .filter((x) => x.cov > 0)
+              .slice(0, 6)
+              .map((x) => ({
+                label: x.s.name,
+                value: x.cov,
+                display: String(x.cov),
+                onClick: () => onNavigate({ kind: 'subfield', id: x.s.id }),
+              }))}
+          />
+        </>
+      )}
+
+      <h3>Subfields by size {totalCov > 0 ? '· bars = your coverage' : ''}</h3>
       <ul className="subfield-list">
         {subfields.map(({ s, cov }) => (
           <li key={s.id}>

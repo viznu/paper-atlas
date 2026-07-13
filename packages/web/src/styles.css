@@ -631,6 +631,82 @@ a.mine-item:hover {
   margin-top: 2px;
 }
 
+.minibars {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 2px 0 4px;
+}
+.mb-row {
+  display: grid;
+  grid-template-columns: 1fr 70px auto;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  text-align: left;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+.mb-row.clickable {
+  cursor: pointer;
+  border-radius: 5px;
+}
+.mb-row.clickable:hover {
+  background: #131c30;
+}
+.mb-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mb-track {
+  height: 7px;
+  background: #131c30;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.mb-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+.mb-val {
+  font-size: 11px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+details.section {
+  border-top: 1px solid #1c2740;
+  margin-top: 6px;
+}
+details.section > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 11px 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+details.section > summary::-webkit-details-marker {
+  display: none;
+}
+details.section > summary::before {
+  content: '▸';
+  color: #7dd3fc;
+  transition: transform 0.15s;
+}
+details.section[open] > summary::before {
+  transform: rotate(90deg);
+}
+
 .mastery {
   font-size: 11px;
   font-weight: 700;

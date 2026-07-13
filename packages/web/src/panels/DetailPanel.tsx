@@ -3,6 +3,7 @@ import { fetchWorks } from '../api';
 import { subfieldGaps } from '../nav';
 import { masteryFor } from '../game';
 import Discover from './Discover';
+import MiniBars from './MiniBars';
 import type { Basemap, Focus, LibraryEntry, Overlay, WorkSummary } from '../types';
 
 /**
@@ -117,6 +118,19 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
     const topics = basemap.topics
       .filter((t) => t.subfield === sf.id)
       .sort((a, b) => b.worksCount - a.worksCount);
+    // your reading distribution across this subfield's topics
+    const covByTopic = overlay?.coverageByTopic ?? {};
+    const myTopicBars = topics
+      .map((t) => ({ t, c: covByTopic[t.id] ?? 0 }))
+      .filter((x) => x.c > 0)
+      .sort((a, b) => b.c - a.c)
+      .slice(0, 6)
+      .map((x) => ({
+        label: x.t.name,
+        value: x.c,
+        display: String(x.c),
+        onClick: () => onNavigate({ kind: 'topic', id: x.t.id }),
+      }));
     return (
       <aside className="panel">
         <button className="close" onClick={onClose}>
@@ -145,44 +159,72 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
             </>
           )}
         </p>
+        {/* Contextual stats for this subfield */}
+        <h3>Citation flow to neighbours</h3>
+        <MiniBars
+          bars={sf.neighbors.slice(0, 6).map((n) => {
+            const nb = basemap.subfields.find((s) => s.id === n.id);
+            return {
+              label: nb?.name ?? n.id,
+              value: n.w,
+              display: `${Math.round(n.w * 100)}%`,
+              onClick: nb ? () => onNavigate({ kind: 'subfield', id: n.id }) : undefined,
+            };
+          })}
+        />
+        {myTopicBars.length > 0 && (
+          <>
+            <h3 className="mine">Your reading here, by topic</h3>
+            <MiniBars bars={myTopicBars} accent="#f5b642" />
+          </>
+        )}
+
         <h3 className="explore">Discover</h3>
         <Discover
           gaps={overlay ? subfieldGaps(sf.id, basemap, overlay.coverage) : []}
           arxivQuery={sf.name}
           onNavigate={onNavigate}
         />
-        <h3>Cites into / cited by</h3>
-        <div className="chips">
-          {sf.neighbors.slice(0, 8).map((n) => {
-            const nb = basemap.subfields.find((s) => s.id === n.id);
-            return (
-              nb && (
-                <button
-                  key={n.id}
-                  className="chip"
-                  onClick={() => onNavigate({ kind: 'subfield', id: n.id })}
-                >
-                  {nb.name}
-                </button>
-              )
-            );
-          })}
-        </div>
-        <h3>Topics ({topics.length})</h3>
-        <div className="chips">
-          {topics.slice(0, 16).map((t) => (
-            <button
-              key={t.id}
-              className="chip subtle"
-              onClick={() => onNavigate({ kind: 'topic', id: t.id })}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
+
         <LibraryHere items={mine} />
-        <h3>Papers</h3>
-        <PaperList kind="subfield" id={sf.id} />
+
+        <details className="section">
+          <summary>Cites into / cited by</summary>
+          <div className="chips">
+            {sf.neighbors.slice(0, 8).map((n) => {
+              const nb = basemap.subfields.find((s) => s.id === n.id);
+              return (
+                nb && (
+                  <button
+                    key={n.id}
+                    className="chip"
+                    onClick={() => onNavigate({ kind: 'subfield', id: n.id })}
+                  >
+                    {nb.name}
+                  </button>
+                )
+              );
+            })}
+          </div>
+        </details>
+        <details className="section">
+          <summary>Topics ({topics.length})</summary>
+          <div className="chips">
+            {topics.slice(0, 24).map((t) => (
+              <button
+                key={t.id}
+                className="chip subtle"
+                onClick={() => onNavigate({ kind: 'topic', id: t.id })}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+        </details>
+        <details className="section">
+          <summary>Top papers (OpenAlex)</summary>
+          <PaperList kind="subfield" id={sf.id} />
+        </details>
       </aside>
     );
   }
