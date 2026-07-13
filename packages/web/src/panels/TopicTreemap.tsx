@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import type { Basemap, BasemapTopic, Focus, Overlay } from '../types';
 import { buildFieldColors, HEAT, mix } from '../palette';
+import { cleanSubfieldTopics } from '../nav';
 import { squarify } from '../treemap';
 
 interface Props {
@@ -43,9 +44,7 @@ export default function TopicTreemap({
   }, [basemap, subfieldId]);
 
   const tiles = useMemo(() => {
-    const topics = basemap.topics
-      .filter((t) => t.subfield === subfieldId)
-      .sort((a, b) => b.worksCount - a.worksCount);
+    const topics = cleanSubfieldTopics(subfieldId, basemap);
     // sqrt-compress so small topics stay clickable while big ones don't dominate entirely
     const items = topics.map((t) => ({ item: t, value: Math.sqrt(t.worksCount || 1) + 2 }));
     return squarify<BasemapTopic>(items, { x: 0, y: 0, w: size.w, h: size.h });

@@ -39,6 +39,38 @@ const fieldNameOf = (basemap: Basemap, subfieldId: string) => {
   return s ? (basemap.fields.find((f) => f.id === s.field)?.name ?? '') : '';
 };
 
+export interface TopicGap {
+  id: string;
+  name: string;
+  works: number;
+}
+
+/**
+ * A subfield's topics, sorted by size, with dominant outliers removed. OpenAlex occasionally
+ * mis-files a huge catch-all topic under the wrong subfield (e.g. a 3.9M-work "Geochemistry"
+ * topic tagged Artificial Intelligence); such a topic dwarfs every real one, so we drop any
+ * leading topic that is more than 3× the next largest.
+ */
+export function cleanSubfieldTopics(subfieldId: string, basemap: Basemap) {
+  const sorted = basemap.topics
+    .filter((t) => t.subfield === subfieldId)
+    .sort((a, b) => b.worksCount - a.worksCount);
+  while (sorted.length >= 3 && sorted[0]!.worksCount > 3 * sorted[1]!.worksCount) sorted.shift();
+  return sorted;
+}
+
+/** Biggest topics WITHIN a subfield that you haven't read yet — the immediate next reads. */
+export function topicGaps(
+  subfieldId: string,
+  basemap: Basemap,
+  coverageByTopic: Record<string, number>,
+): TopicGap[] {
+  return cleanSubfieldTopics(subfieldId, basemap)
+    .filter((t) => (coverageByTopic[t.id] ?? 0) === 0)
+    .slice(0, 6)
+    .map((t) => ({ id: t.id, name: t.name, works: t.worksCount }));
+}
+
 /** "Explore next" from a subfield: its citation-flow neighbours you have not read into. */
 export function subfieldGaps(
   subfieldId: string,

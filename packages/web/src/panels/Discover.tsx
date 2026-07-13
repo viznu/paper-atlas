@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { fetchArxiv } from '../api';
 import type { ArxivPaper, Focus } from '../types';
-import type { LocalGap } from '../nav';
+import type { LocalGap, TopicGap } from '../nav';
 
 interface Props {
   gaps: LocalGap[];
+  topicGaps?: TopicGap[];
   arxivQuery: string;
   onNavigate: (focus: Focus) => void;
 }
@@ -21,8 +22,9 @@ function timeAgo(iso: string): string {
 }
 
 /** Tabbed discovery: frontier gaps to read vs. the freshest arXiv preprints in this area. */
-export default function Discover({ gaps, arxivQuery, onNavigate }: Props) {
-  const [tab, setTab] = useState<Tab>(gaps.length ? 'gaps' : 'arxiv');
+export default function Discover({ gaps, topicGaps = [], arxivQuery, onNavigate }: Props) {
+  const hasGaps = gaps.length > 0 || topicGaps.length > 0;
+  const [tab, setTab] = useState<Tab>(hasGaps ? 'gaps' : 'arxiv');
   const [papers, setPapers] = useState<ArxivPaper[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -42,7 +44,7 @@ export default function Discover({ gaps, arxivQuery, onNavigate }: Props) {
   return (
     <div className="discover">
       <div className="disc-tabs">
-        {gaps.length > 0 && (
+        {hasGaps && (
           <button className={tab === 'gaps' ? 'disc-tab active' : 'disc-tab'} onClick={() => setTab('gaps')}>
             Explore next
           </button>
@@ -54,20 +56,41 @@ export default function Discover({ gaps, arxivQuery, onNavigate }: Props) {
 
       {tab === 'gaps' && (
         <>
-          <p className="muted small">Neighbouring areas you cite but haven&apos;t explored.</p>
-          <ol className="frontier">
-            {gaps.map((g) => (
-              <li key={g.id}>
-                <button onClick={() => onNavigate({ kind: 'subfield', id: g.id })}>
-                  <span className="frontier-name">{g.name}</span>
-                  <span className="muted small">
-                    {g.field}
-                    {g.via.length ? ` · via ${g.via.join(', ')}` : ''}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ol>
+          {topicGaps.length > 0 && (
+            <>
+              <p className="muted small">Biggest topics here you haven&apos;t read yet.</p>
+              <ol className="frontier">
+                {topicGaps.map((t) => (
+                  <li key={t.id}>
+                    <button onClick={() => onNavigate({ kind: 'topic', id: t.id })}>
+                      <span className="frontier-name">{t.name}</span>
+                      <span className="muted small">{t.works.toLocaleString()} papers</span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+          {gaps.length > 0 && (
+            <>
+              <p className="muted small" style={{ marginTop: topicGaps.length ? 12 : 0 }}>
+                Or branch into a neighbouring area:
+              </p>
+              <ol className="frontier">
+                {gaps.map((g) => (
+                  <li key={g.id}>
+                    <button onClick={() => onNavigate({ kind: 'subfield', id: g.id })}>
+                      <span className="frontier-name">{g.name}</span>
+                      <span className="muted small">
+                        {g.field}
+                        {g.via.length ? ` · via ${g.via.join(', ')}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
         </>
       )}
 

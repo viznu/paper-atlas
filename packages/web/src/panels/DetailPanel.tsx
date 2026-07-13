@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchWorks } from '../api';
-import { subfieldGaps } from '../nav';
+import { subfieldGaps, topicGaps, cleanSubfieldTopics } from '../nav';
 import { masteryFor } from '../game';
 import Discover from './Discover';
 import MiniBars from './MiniBars';
@@ -115,9 +115,7 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
     if (!sf) return null;
     const field = basemap.fields.find((f) => f.id === sf.field);
     const mine = overlay?.itemsBySubfield[sf.id] ?? [];
-    const topics = basemap.topics
-      .filter((t) => t.subfield === sf.id)
-      .sort((a, b) => b.worksCount - a.worksCount);
+    const topics = cleanSubfieldTopics(sf.id, basemap);
     // your reading distribution across this subfield's topics
     const covByTopic = overlay?.coverageByTopic ?? {};
     const myTopicBars = topics
@@ -181,6 +179,7 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
 
         <h3 className="explore">Discover</h3>
         <Discover
+          topicGaps={overlay ? topicGaps(sf.id, basemap, overlay.coverageByTopic) : []}
           gaps={overlay ? subfieldGaps(sf.id, basemap, overlay.coverage) : []}
           arxivQuery={sf.name}
           onNavigate={onNavigate}
