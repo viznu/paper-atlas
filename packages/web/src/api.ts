@@ -1,4 +1,11 @@
-import type { Basemap, LibraryState, WorkSummary } from './types';
+import type { ArxivPaper, Basemap, LibraryState, WorkSummary } from './types';
+
+export async function fetchArxiv(query: string): Promise<ArxivPaper[]> {
+  const res = await fetch(`/api/arxiv?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error(`arxiv: ${res.status}`);
+  const data = (await res.json()) as { papers: ArxivPaper[] };
+  return data.papers ?? [];
+}
 
 export async function fetchLibrary(): Promise<LibraryState> {
   const res = await fetch('/api/library');

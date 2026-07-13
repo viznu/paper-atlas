@@ -93,3 +93,13 @@ export interface LibraryState {
   error: string | null;
   syncing: boolean;
 }
+
+export interface ArxivPaper {
+  id: string;
+  title: string;
+  authors: string[];
+  published: string;
+  summary: string;
+  url: string;
+  pdf: string;
+}

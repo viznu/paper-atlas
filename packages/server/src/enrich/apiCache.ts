@@ -16,11 +16,14 @@ export class ApiCache {
     this.db.exec('CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT, at INTEGER)');
   }
 
-  get(key: string): unknown | undefined {
-    const row = this.db.prepare('SELECT v FROM kv WHERE k = ?').get(key) as
-      | { v: string }
+  get(key: string, maxAgeMs?: number): unknown | undefined {
+    const row = this.db.prepare('SELECT v, at FROM kv WHERE k = ?').get(key) as
+      | { v: string; at: number }
       | undefined;
-    return row ? JSON.parse(row.v) : undefined;
+    if (!row) return undefined;
+    // Optional freshness window (used for time-sensitive feeds like arXiv "latest").
+    if (maxAgeMs != null && Date.now() - row.at > maxAgeMs) return undefined;
+    return JSON.parse(row.v);
   }
 
   set(key: string, value: unknown): void {

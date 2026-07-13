@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { basemapRaw } from './basemap.js';
 import { worksFor, RateLimitError } from './openalex.js';
 import { libraryState, syncLibrary } from './library.js';
+import { arxivLatest } from './arxiv.js';
 
 /** Wraps a live OpenAlex fetch so a daily-budget exhaustion degrades to a 200 with a flag. */
 async function withRateLimit<T>(reply: { code: (n: number) => unknown }, fn: () => Promise<T>) {
@@ -53,6 +54,18 @@ export async function buildServer(opts: { dev?: boolean } = {}) {
       return withRateLimit(reply, () => worksFor({ kind: 'topic', id: req.params.id }, mode));
     },
   );
+
+  // Fresh arXiv preprints matching a field/subfield/topic name (independent of OpenAlex budget).
+  app.get<{ Querystring: { q?: string } }>('/api/arxiv', async (req, reply) => {
+    const q = (req.query.q ?? '').slice(0, 120);
+    if (!q) return { papers: [] };
+    try {
+      return { papers: await arxivLatest(q, 10) };
+    } catch (err) {
+      reply.code(200);
+      return { papers: [], error: String(err) };
+    }
+  });
 
   // Serve the built web UI when it exists (published package / after `npm run build`).
   const here = dirname(fileURLToPath(import.meta.url));

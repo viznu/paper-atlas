@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchWorks } from '../api';
 import { subfieldGaps } from '../nav';
-import GapList from './GapList';
+import Discover from './Discover';
 import type { Basemap, Focus, LibraryEntry, Overlay, WorkSummary } from '../types';
 
 /**
@@ -137,13 +137,12 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
             </>
           )}
         </p>
-        {overlay && (
-          <GapList
-            gaps={subfieldGaps(sf.id, basemap, overlay.coverage)}
-            onNavigate={onNavigate}
-            blurb="Neighbouring subfields this one cites that you haven't explored."
-          />
-        )}
+        <h3 className="explore">Discover</h3>
+        <Discover
+          gaps={overlay ? subfieldGaps(sf.id, basemap, overlay.coverage) : []}
+          arxivQuery={sf.name}
+          onNavigate={onNavigate}
+        />
         <h3>Cites into / cited by</h3>
         <div className="chips">
           {sf.neighbors.slice(0, 8).map((n) => {
@@ -221,6 +220,8 @@ export default function DetailPanel({ basemap, focus, overlay, onNavigate, onClo
           </div>
         </>
       )}
+      <h3 className="explore">Discover</h3>
+      <Discover gaps={[]} arxivQuery={topic.name} onNavigate={onNavigate} />
       <LibraryHere items={mine} />
       <h3>All papers in this topic</h3>
       <PaperList kind="topic" id={topic.id} />

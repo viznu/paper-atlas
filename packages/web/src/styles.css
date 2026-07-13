@@ -327,6 +327,29 @@ body,
 .treemap-wrap {
   flex: 1;
   min-height: 0;
+  position: relative;
+}
+.tm-hover {
+  position: absolute;
+  max-width: 220px;
+  padding: 6px 9px;
+  background: rgba(6, 10, 18, 0.96);
+  border: 1px solid #f5b642;
+  border-radius: 7px;
+  pointer-events: none;
+  z-index: 5;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+.tm-hover-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  line-height: 1.25;
+}
+.tm-hover-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
 }
 .treemap {
   display: block;
@@ -489,6 +512,50 @@ body,
 
 .panel h3.explore {
   color: #f5b642;
+}
+.disc-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.disc-tab {
+  padding: 5px 12px;
+  border-radius: 7px;
+  border: 1px solid #2c3a58;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+}
+.disc-tab.active {
+  background: #1a2439;
+  color: #e2e8f0;
+  border-color: #f5b642;
+}
+.arxiv-list {
+  display: flex;
+  flex-direction: column;
+}
+.arxiv-item {
+  display: block;
+  padding: 8px 10px;
+  margin: 0 -10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+.arxiv-item:hover {
+  background: #131c30;
+}
+.arxiv-title {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #e2e8f0;
+}
+.arxiv-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
 }
 .mine-details {
   margin: 14px -8px 4px;

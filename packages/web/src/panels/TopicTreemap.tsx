@@ -54,10 +54,12 @@ export default function TopicTreemap({
   const cov = overlay?.coverageByTopic ?? {};
   const maxCov = Math.max(1, ...Object.values(cov));
 
+  const [hover, setHover] = useState<number | null>(null);
+
   return (
     <div className="treemap-wrap" ref={ref}>
       <svg width={size.w} height={size.h} className="treemap">
-        {tiles.map((tile) => {
+        {tiles.map((tile, ti) => {
           const t = tile.item;
           const c = cov[t.id] ?? 0;
           const heat = c / maxCov;
@@ -70,8 +72,14 @@ export default function TopicTreemap({
               key={t.id}
               className="tm-tile"
               onClick={() => onNavigate({ kind: 'topic', id: t.id })}
+              onMouseEnter={() => setHover(ti)}
+              onMouseLeave={() => setHover((h) => (h === ti ? null : h))}
               role="button"
             >
+              <title>
+                {t.name} — {t.worksCount.toLocaleString()} papers
+                {c > 0 ? `, ${c} in your library` : ''}
+              </title>
               <rect
                 x={tile.x + pad}
                 y={tile.y + pad}
@@ -99,6 +107,25 @@ export default function TopicTreemap({
           );
         })}
       </svg>
+      {hover != null &&
+        tiles[hover] &&
+        (() => {
+          const tile = tiles[hover]!;
+          const t = tile.item;
+          const c = cov[t.id] ?? 0;
+          // full-text label that floats over the hovered tile, so tiny tiles stay readable
+          const left = Math.min(tile.x, size.w - 220);
+          const top = Math.max(2, tile.y - 4);
+          return (
+            <div className="tm-hover" style={{ left, top }}>
+              <div className="tm-hover-name">{t.name}</div>
+              <div className="tm-hover-meta">
+                {t.worksCount.toLocaleString()} papers
+                {c > 0 ? ` · ${c} in your library` : ''}
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 }
