@@ -103,3 +103,97 @@ export interface ArxivPaper {
   url: string;
   pdf: string;
 }
+
+// ---- Reading Desk ----
+export interface RecPaper {
+  id: string;
+  title: string;
+  year: number | null;
+  authors: string[];
+  venue: string | null;
+  citedBy: number;
+  doi: string | null;
+  openAccessUrl: string | null;
+  topic: string | null;
+  citedByYours: number;
+  viaTitles: string[];
+}
+export interface RecommendationsResponse {
+  papers: RecPaper[];
+  needsSync: boolean;
+  rateLimited: boolean;
+}
+export interface PaperRef {
+  id: string;
+  title: string;
+  year: number | null;
+  authors: string[];
+  venue: string | null;
+  citedBy: number;
+  doi: string | null;
+  openAccessUrl: string | null;
+  topic: string | null;
+  inLibrary: boolean;
+  contexts: string[];
+  intents: string[];
+}
+export interface PaperDetail {
+  id: string;
+  title: string;
+  year: number | null;
+  authors: string[];
+  venue: string | null;
+  citedBy: number;
+  doi: string | null;
+  openAccessUrl: string | null;
+  topic: string | null;
+  abstract: string | null;
+  references: PaperRef[];
+  contextsAvailable: boolean;
+}
+export interface SummaryCards {
+  problem: string;
+  achieved: string;
+  showed: string;
+  limitations: string;
+  future: string;
+}
+export interface PaperSummary {
+  enabled: boolean;
+  model?: string;
+  noAbstract?: boolean;
+  mock?: boolean;
+  cards?: SummaryCards;
+  error?: string;
+}
+
+export type FeedTab = 'fresh' | 'claude' | 'citations' | 'phd';
+
+export interface FeedEntry {
+  id: string; // "W..." or "arxiv:<id>"
+  arxivId?: string | null;
+  title: string;
+  authors: string[];
+  year?: number | null;
+  published?: string | null;
+  summary?: string | null;
+  url?: string | null;
+  pdf?: string | null;
+  doi?: string | null;
+  citedBy?: number | null;
+  categories?: string[];
+  matched?: string[];
+  inLibraryTopic?: boolean;
+  reason?: string | null;
+  faculty?: string | null;
+  institution?: string | null;
+}
+export interface FeedResponse {
+  date: string | null;
+  dates: string[];
+  generatedAt: number | null;
+  items: FeedEntry[];
+  feedback: { paperId: string; feed: string; signal: string }[];
+  read: string[];
+  rateLimited?: boolean;
+}

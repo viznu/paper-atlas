@@ -6,9 +6,11 @@ import LibraryPanel from './panels/LibraryPanel';
 import TopicTreemap from './panels/TopicTreemap';
 import HoverCard from './panels/HoverCard';
 import ExplorerPanel from './panels/ExplorerPanel';
+import ReadingDesk from './panels/ReadingDesk';
 import Breadcrumb from './Breadcrumb';
 import SearchBox from './SearchBox';
-import { fetchBasemap, fetchLibrary, syncLibrary } from './api';
+import SideNav, { type View } from './SideNav';
+import { fetchBasemap, fetchConfig, fetchLibrary, syncLibrary } from './api';
 import { stackFor } from './nav';
 import type { Basemap, Focus, LibraryState } from './types';
 
@@ -20,6 +22,8 @@ export default function App() {
   const [library, setLibrary] = useState<LibraryState | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [gameMode, setGameMode] = useState(false);
+  const [view, setView] = useState<View>('atlas');
+  const [summariesEnabled, setSummariesEnabled] = useState(false);
 
   const focus = stack.length ? stack[stack.length - 1]! : null;
 
@@ -27,6 +31,9 @@ export default function App() {
     fetchBasemap()
       .then(setBasemap)
       .catch((e) => setLoadError(String(e)));
+    fetchConfig()
+      .then((c) => setSummariesEnabled(c.summaries))
+      .catch(() => {});
   }, []);
 
   const runSync = useCallback(() => {
@@ -89,31 +96,44 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <AtlasCanvas
-        basemap={basemap}
-        focus={focus}
-        overlay={library?.overlay ?? null}
-        fog={gameMode}
-        onNavigate={navigate}
-        hoverInfo={setHoverSub}
-      />
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-name">paper-atlas</span>
-          <span className="brand-sub">a map of science, from citation flows</span>
-        </div>
-        <SearchBox basemap={basemap} onNavigate={navigate} />
-        <button
-          className={gameMode ? 'mode-toggle on' : 'mode-toggle'}
-          onClick={() => setGameMode((g) => !g)}
-          title="Toggle Explorer mode (fog of war + quests)"
-        >
-          {gameMode ? '🎮 Explorer on' : '🎮 Explorer'}
-        </button>
-      </header>
+    <div className={view === 'desk' ? 'app view-desk' : 'app'}>
+      <SideNav view={view} onChange={setView} />
 
-      <Breadcrumb basemap={basemap} stack={stack} onGoTo={goTo} />
+      {view === 'desk' && (
+        <ReadingDesk
+          library={library}
+          summariesEnabled={summariesEnabled}
+          syncing={syncing}
+          onSync={runSync}
+        />
+      )}
+
+      {view === 'atlas' && (
+        <>
+          <AtlasCanvas
+            basemap={basemap}
+            focus={focus}
+            overlay={library?.overlay ?? null}
+            fog={gameMode}
+            onNavigate={navigate}
+            hoverInfo={setHoverSub}
+          />
+          <header className="topbar">
+            <div className="brand">
+              <span className="brand-name">paper-atlas</span>
+              <span className="brand-sub">a map of science, from citation flows</span>
+            </div>
+            <SearchBox basemap={basemap} onNavigate={navigate} />
+            <button
+              className={gameMode ? 'mode-toggle on' : 'mode-toggle'}
+              onClick={() => setGameMode((g) => !g)}
+              title="Toggle Explorer mode (fog of war + quests)"
+            >
+              {gameMode ? '🎮 Explorer on' : '🎮 Explorer'}
+            </button>
+          </header>
+
+          <Breadcrumb basemap={basemap} stack={stack} onGoTo={goTo} />
 
       {/* Hover stats on the right (only when no detail panel occupies that space). */}
       {hoverSub && (!focus || focus.kind === 'field') && (
@@ -175,13 +195,15 @@ export default function App() {
                 onClose={() => setStack((s) => s.slice(0, -1))}
               />
             </>
-          );
-        })()}
+              );
+            })()}
 
-      <footer className="credits">
-        data: <a href="https://openalex.org">OpenAlex</a> · click a field to dive in · scroll to
-        zoom · esc to go up
-      </footer>
+          <footer className="credits">
+            data: <a href="https://openalex.org">OpenAlex</a> · click a field to dive in · scroll to
+            zoom · esc to go up
+          </footer>
+        </>
+      )}
     </div>
   );
 }

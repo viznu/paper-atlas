@@ -1,5 +1,5 @@
 import { ingest, findZoteroDataDir } from './ingest/index.js';
-import { matchLibrary } from './enrich/matcher.js';
+import { matchLibrary, type MatchedItem } from './enrich/matcher.js';
 import { EnrichCache } from './enrich/cache.js';
 import { computeOverlay, type Overlay } from './atlas/overlay.js';
 import { basemapRaw } from './basemap.js';
@@ -18,8 +18,20 @@ let state: LibraryState = {
   syncing: false,
 };
 
+/**
+ * The last successful match result, kept in memory so the Reading Desk (recommendations,
+ * paper detail) can read each library work's `referencedWorks` without re-ingesting. Empty
+ * until the first sync runs.
+ */
+let lastMatched: MatchedItem[] = [];
+
 export function libraryState(): LibraryState {
   return state;
+}
+
+/** Matched library works (only those resolved to an OpenAlex work), for citation-based recs. */
+export function matchedWorks(): MatchedItem[] {
+  return lastMatched.filter((m) => m.work);
 }
 
 /**
@@ -37,6 +49,7 @@ export async function syncLibrary(opts: { refresh?: boolean } = {}): Promise<Lib
   try {
     const { items } = await ingest();
     const matched = await matchLibrary(items, { cache, refresh: opts.refresh });
+    lastMatched = matched;
     const basemap = JSON.parse(basemapRaw());
     state = {
       configured: true,

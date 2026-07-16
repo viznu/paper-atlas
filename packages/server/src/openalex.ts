@@ -89,13 +89,52 @@ export interface WorkSummary {
   topic: string | null;
 }
 
-const stripMarkup = (s: string) =>
+export const stripMarkup = (s: string) =>
   s
     .replace(/<[^>]+>/g, '')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .trim();
+
+const shortId = (url: string) => url.replace('https://openalex.org/', '');
+
+/**
+ * OpenAlex ships abstracts as an inverted index (word -> positions) for licensing reasons.
+ * Rebuild the running text so it can be shown / summarised. Returns null when absent.
+ */
+export function reconstructAbstract(
+  idx: Record<string, number[]> | null | undefined,
+): string | null {
+  if (!idx) return null;
+  const words: string[] = [];
+  for (const [word, positions] of Object.entries(idx)) for (const p of positions) words[p] = word;
+  const text = words.filter((w) => w != null).join(' ').trim();
+  return text.length ? stripMarkup(text) : null;
+}
+
+/** Fetch many works at once by OpenAlex id (batched 50/req, disk-cached). Keyed by short id. */
+export async function worksByIds(
+  ids: string[],
+  select = WORK_FIELDS,
+): Promise<Map<string, any>> {
+  const out = new Map<string, any>();
+  const uniq = [...new Set(ids)];
+  for (let i = 0; i < uniq.length; i += 50) {
+    const batch = uniq.slice(i, i + 50);
+    const data: any = await openalexGet(
+      `/works?filter=openalex_id:${batch.join('|')}&per_page=50&select=${select}`,
+    );
+    for (const w of data.results ?? []) out.set(shortId(w.id), w);
+  }
+  return out;
+}
+
+/** Fetch a single work by id with a chosen field set (disk-cached). */
+export async function workById(id: string, select: string): Promise<any | null> {
+  const data: any = await openalexGet(`/works/${id}?select=${select}`);
+  return data ?? null;
+}
 
 function toWorkSummary(w: any): WorkSummary {
   return {

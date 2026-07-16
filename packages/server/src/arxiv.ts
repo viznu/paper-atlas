@@ -25,6 +25,7 @@ export interface ArxivPaper {
   summary: string;
   url: string; // abstract page
   pdf: string; // pdf link
+  categories: string[]; // e.g. ["cs.LG", "stat.ML"]
 }
 
 const strip = (s: string) =>
@@ -48,14 +49,16 @@ function parseAtom(xml: string): ArxivPaper[] {
     const id = idUrl.replace(/^https?:\/\/arxiv\.org\/abs\//, '').replace(/v\d+$/, '');
     const authors = [...e.matchAll(/<name>([\s\S]*?)<\/name>/g)].map((a) => strip(a[1]!)).slice(0, 6);
     const pdf = (e.match(/<link[^>]*title="pdf"[^>]*href="([^"]+)"/) ?? [])[1] ?? `https://arxiv.org/pdf/${id}`;
+    const categories = [...e.matchAll(/<category[^>]*term="([^"]+)"/g)].map((c) => c[1]!);
     out.push({
       id,
       title: pick('title'),
       authors,
       published: pick('published'),
-      summary: pick('summary').slice(0, 320),
+      summary: pick('summary'),
       url: idUrl.replace(/v\d+$/, ''),
       pdf,
+      categories: [...new Set(categories)],
     });
   }
   return out;
@@ -76,6 +79,30 @@ export async function arxivLatest(query: string, max = 10): Promise<ArxivPaper[]
   lastRequestAt = Date.now();
 
   const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw new Error(`arXiv ${res.status}`);
+  const papers = parseAtom(await res.text());
+  diskCache().set(key, papers);
+  return papers;
+}
+
+/**
+ * Run a raw arXiv `search_query` (e.g. `cat:cs.LG` or `abs:"information theory"`), newest first.
+ * Used by the daily-feed generator to gather fresh candidates by category and by interest term.
+ * Cached briefly so a same-day regeneration doesn't re-hit arXiv.
+ */
+export async function arxivQuery(searchQuery: string, max = 40): Promise<ArxivPaper[]> {
+  const q = searchQuery.trim();
+  if (!q) return [];
+  const url = `${API}?search_query=${encodeURIComponent(q)}&sortBy=submittedDate&sortOrder=descending&max_results=${max}`;
+  const key = `arxivq:${url}`;
+  const hit = diskCache().get(key, TTL_MS);
+  if (hit !== undefined) return hit as ArxivPaper[];
+
+  const wait = lastRequestAt + MIN_SPACING_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastRequestAt = Date.now();
+
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`arXiv ${res.status}`);
   const papers = parseAtom(await res.text());
   diskCache().set(key, papers);
